@@ -1,0 +1,38 @@
+@model List<Facility>
+@{
+    ViewData["Title"] = "Facilities";
+    var categories = ViewBag.Categories as List<string> ?? new();
+    var selected = ViewBag.SelectedCategory as string;
+}
+
+<section class="section">
+    <div class="container">
+        <div class="section-head">
+            <h2>Facilities</h2>
+            <p class="muted mb-0">Browse images, prices, capacity and operating hours for every bookable space.</p>
+        </div>
+        <div class="d-flex flex-wrap gap-2 mb-4">
+            <a class="btn btn-sm @(string.IsNullOrEmpty(selected) ? "btn-primary" : "btn-ghost")" asp-action="Index">All</a>
+            @foreach (var category in categories)
+            {
+                <a class="btn btn-sm @(selected == category ? "btn-primary" : "btn-ghost")" asp-action="Index" asp-route-category="@category">@category</a>
+            }
+        </div>
+        <div class="facility-grid">
+            @foreach (var facility in Model)
+            {
+                <a class="facility-tile" asp-action="Details" asp-route-id="@facility.Id">
+                    <img src="@(facility.ImageUrl ?? "/images/function-hall.svg")" alt="@facility.Name" />
+                    <div class="facility-tile__body">
+                        <h3 class="h5 mb-1">@facility.Name</h3>
+                        <p class="muted small mb-2">@facility.Description</p>
+                        <div class="facility-tile__meta">
+                            <span>@facility.OpenTime.ToString(@"hh\:mm") – @facility.CloseTime.ToString(@"hh\:mm")</span>
+                            <span>@(facility.HourlyRate == 0 ? "Included" : $"MYR {facility.HourlyRate:0.00}/hr")</span>
+                        </div>
+                    </div>
+                </a>
+            }
+        </div>
+    </div>
+</section>

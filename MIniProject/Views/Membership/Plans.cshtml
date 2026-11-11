@@ -1,0 +1,42 @@
+@model List<MembershipPlan>
+@{
+    ViewData["Title"] = "Membership plans";
+}
+
+<section class="section">
+    <div class="container">
+        <div class="section-head">
+            <h2>Membership plans</h2>
+            <p class="muted mb-0">Choose a tier for advance booking limits, guest allowances and facility discounts.</p>
+        </div>
+        <div class="row g-4">
+            @foreach (var plan in Model)
+            {
+                <div class="col-md-4">
+                    <div class="panel h-100">
+                        <h3 class="h4">@plan.Name</h3>
+                        <p class="display mb-2" style="font-size:2rem">MYR @plan.AnnualFee.ToString("0.00")</p>
+                        <p class="muted">@plan.Description</p>
+                        <ul class="mb-4">
+                            <li>Book up to @plan.AdvanceBookingDays days ahead</li>
+                            <li>Up to @plan.MaxGuestsPerBooking guests per booking</li>
+                            <li>@plan.DiscountPercent% facility discount</li>
+                        </ul>
+                        @if (User.Identity?.IsAuthenticated == true)
+                        {
+                            <form asp-action="Subscribe" method="post">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="planId" value="@plan.Id" />
+                                <button class="btn btn-primary" type="submit">Subscribe</button>
+                            </form>
+                        }
+                        else
+                        {
+                            <a class="btn btn-primary" asp-controller="Account" asp-action="Register">Register to join</a>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</section>

@@ -1,0 +1,98 @@
+@model DashboardStats
+@{
+    ViewData["Title"] = "Reports & analytics";
+    var bookings = ViewBag.RecentBookings as List<Booking> ?? new();
+    var payments = ViewBag.Payments as List<PaymentTransaction> ?? new();
+    var maxUsage = Math.Max(1, Model.FacilityUsage.DefaultIfEmpty().Max(x => x?.BookingCount ?? 0));
+}
+
+<section class="section">
+    <div class="container">
+        <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-4">
+            <div class="section-head mb-0">
+                <h2>Reports & analytics</h2>
+                <p class="muted mb-0">Booking statistics, revenue and facility usage for management decisions.</p>
+            </div>
+            <a class="btn btn-ghost" asp-action="ExportBookings">Export bookings CSV</a>
+        </div>
+
+        <div class="stat-row mb-4">
+            <div class="stat"><span class="muted">Bookings today</span><strong>@Model.BookingsToday</strong></div>
+            <div class="stat"><span class="muted">Active members</span><strong>@Model.ActiveMembers</strong></div>
+            <div class="stat"><span class="muted">Pending approvals</span><strong>@Model.PendingApprovals</strong></div>
+            <div class="stat"><span class="muted">Revenue this month</span><strong>MYR @Model.RevenueThisMonth.ToString("0.00")</strong></div>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-lg-6">
+                <div class="panel">
+                    <h3 class="h5">Facility usage</h3>
+                    <div class="chart-bars">
+                        @foreach (var item in Model.FacilityUsage)
+                        {
+                            var width = (int)Math.Round(100.0 * item.BookingCount / maxUsage);
+                            <div class="chart-bar">
+                                <span>@item.FacilityName</span>
+                                <div class="chart-bar__track"><div class="chart-bar__fill" style="width:@width%"></div></div>
+                                <strong>@item.BookingCount</strong>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="panel">
+                    <h3 class="h5">Peak booking hours (UTC)</h3>
+                    <div class="chart-bars">
+                        @foreach (var item in Model.PeakHours)
+                        {
+                            var maxPeak = Math.Max(1, Model.PeakHours.DefaultIfEmpty().Max(x => x?.Count ?? 0));
+                            var width = (int)Math.Round(100.0 * item.Count / maxPeak);
+                            <div class="chart-bar">
+                                <span>@item.Hour:00</span>
+                                <div class="chart-bar__track"><div class="chart-bar__fill" style="width:@width%"></div></div>
+                                <strong>@item.Count</strong>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4 mt-1">
+            <div class="col-lg-7">
+                <div class="panel">
+                    <h3 class="h5">Recent bookings</h3>
+                    <div class="table-responsive">
+                        <table class="table mb-0">
+                            <thead><tr><th>Facility</th><th>Member</th><th>When</th><th>Status</th></tr></thead>
+                            <tbody>
+                            @foreach (var booking in bookings)
+                            {
+                                <tr>
+                                    <td>@booking.Facility?.Name</td>
+                                    <td>@booking.Member?.FullName</td>
+                                    <td>@booking.StartUtc.ToLocalTime().ToString("dd MMM HH:mm")</td>
+                                    <td>@booking.Status</td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="panel">
+                    <h3 class="h5">Recent payments</h3>
+                    @foreach (var payment in payments)
+                    {
+                        <div class="d-flex justify-content-between py-2 border-bottom">
+                            <span>@payment.Reference</span>
+                            <span>MYR @payment.Amount.ToString("0.00")</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

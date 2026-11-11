@@ -1,0 +1,44 @@
+@model List<Guest>
+@{
+    ViewData["Title"] = "Guests";
+}
+
+<section class="section">
+    <div class="container">
+        <div class="section-head">
+            <h2>Guest registration</h2>
+            <p class="muted mb-0">Guests registered with your bookings and their digital visitor passes.</p>
+        </div>
+        <div class="panel">
+            @if (!Model.Any())
+            {
+                <p class="muted mb-0">No guests yet. Add guests when creating a reservation.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead><tr><th>Name</th><th>ID</th><th>Phone</th><th>Passes</th></tr></thead>
+                        <tbody>
+                        @foreach (var guest in Model)
+                        {
+                            <tr>
+                                <td>@guest.FullName</td>
+                                <td>@guest.IdentificationNumber</td>
+                                <td>@guest.Phone</td>
+                                <td>
+                                    @foreach (var pass in guest.Passes)
+                                    {
+                                        <a asp-action="Pass" asp-route-id="@pass.Id">@pass.PassCode</a>
+                                        <text> </text>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</section>

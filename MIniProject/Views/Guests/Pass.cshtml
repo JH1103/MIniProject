@@ -1,0 +1,27 @@
+@model VisitorPass
+@{
+    ViewData["Title"] = "Visitor pass";
+    var qr = ViewBag.QrBase64 as string;
+}
+
+<section class="section">
+    <div class="container" style="max-width:520px">
+        <div class="panel text-center">
+            <h2 class="h4">Digital visitor pass</h2>
+            <p class="muted">@Model.Guest?.FullName</p>
+            @if (!string.IsNullOrEmpty(qr))
+            {
+                <img alt="QR code" style="width:220px;height:220px" src="data:image/png;base64,@qr" />
+            }
+            <p class="mt-3 mb-1"><strong>@Model.PassCode</strong></p>
+            <p class="muted mb-0">
+                Valid @Model.ValidFrom.ToLocalTime().ToString("dd MMM HH:mm") –
+                @Model.ValidTo.ToLocalTime().ToString("dd MMM HH:mm")
+                @if (Model.Booking?.Facility is not null)
+                {
+                    <text>· @Model.Booking.Facility.Name</text>
+                }
+            </p>
+        </div>
+    </div>
+</section>

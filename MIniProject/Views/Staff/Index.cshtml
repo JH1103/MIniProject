@@ -1,0 +1,81 @@
+@{
+    ViewData["Title"] = "Staff dashboard";
+    var today = ViewBag.TodayBookings as List<Booking> ?? new();
+    var pending = ViewBag.PendingApprovals as List<Booking> ?? new();
+    var facilities = ViewBag.FacilityStatus as List<Facility> ?? new();
+}
+
+<section class="section">
+    <div class="container">
+        <div class="section-head">
+            <h2>Staff dashboard</h2>
+            <p class="muted mb-0">Today’s bookings, pending approvals and facility status.</p>
+        </div>
+        <div class="stat-row mb-4">
+            <div class="stat"><span class="muted">Today’s bookings</span><strong>@today.Count</strong></div>
+            <div class="stat"><span class="muted">Pending approvals</span><strong>@pending.Count</strong></div>
+            <div class="stat"><span class="muted">Facilities online</span><strong>@facilities.Count(f => f.Status == FacilityStatus.Available)</strong></div>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-lg-7">
+                <div class="panel">
+                    <h3 class="h5">Today</h3>
+                    <div class="table-responsive">
+                        <table class="table mb-0">
+                            <thead><tr><th>Time</th><th>Facility</th><th>Member</th><th>Status</th></tr></thead>
+                            <tbody>
+                            @foreach (var booking in today)
+                            {
+                                <tr>
+                                    <td>@booking.StartUtc.ToLocalTime().ToString("HH:mm")</td>
+                                    <td>@booking.Facility?.Name</td>
+                                    <td>@booking.Member?.FullName</td>
+                                    <td>@booking.Status</td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="panel mb-3">
+                    <h3 class="h5">Pending approvals</h3>
+                    @if (!pending.Any())
+                    {
+                        <p class="muted mb-0">No bookings awaiting approval.</p>
+                    }
+                    else
+                    {
+                        @foreach (var booking in pending)
+                        {
+                            <div class="d-flex justify-content-between align-items-center gap-2 py-2 border-bottom">
+                                <div>
+                                    <strong>@booking.Facility?.Name</strong>
+                                    <div class="small muted">@booking.Member?.FullName · @booking.StartUtc.ToLocalTime().ToString("dd MMM HH:mm")</div>
+                                </div>
+                                <form asp-action="Approve" method="post">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@booking.Id" />
+                                    <button class="btn btn-sm btn-primary" type="submit">Approve</button>
+                                </form>
+                            </div>
+                        }
+                    }
+                </div>
+                <div class="panel">
+                    <h3 class="h5">Facility status</h3>
+                    @foreach (var facility in facilities)
+                    {
+                        <div class="d-flex justify-content-between py-1">
+                            <span>@facility.Name</span>
+                            <span class="badge-soft">@facility.Status</span>
+                        </div>
+                    }
+                    <a class="btn btn-ghost btn-sm mt-3" asp-action="CheckIn">Open guest check-in</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

@@ -1,4 +1,15 @@
-﻿// Please see documentation at https://learn.microsoft.com/aspnet/core/client-side/bundling-and-minification
-// for details on configuring this project to bundle and minify static web assets.
+﻿(() => {
+  const flashes = document.querySelectorAll('.flash');
+  flashes.forEach((el) => {
+    setTimeout(() => {
+      el.style.transition = 'opacity .4s ease, transform .4s ease';
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(-6px)';
+    }, 4200);
+  });
 
-// Write your JavaScript code.
+  const tiles = document.querySelectorAll('.facility-tile');
+  tiles.forEach((tile, index) => {
+    tile.style.animationDelay = `${index * 70}ms`;
+  });
+})();

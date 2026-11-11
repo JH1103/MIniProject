@@ -1,0 +1,113 @@
+@{
+    ViewData["Title"] = "Admin";
+    var stats = ViewBag.Stats as DashboardStats ?? new();
+    var facilities = ViewBag.Facilities as List<Facility> ?? new();
+    var members = ViewBag.Members as List<ApplicationUser> ?? new();
+    var refunds = ViewBag.Refunds as List<RefundRequest> ?? new();
+    var settings = ViewBag.Settings as List<SystemSetting> ?? new();
+}
+
+<section class="section">
+    <div class="container">
+        <div class="section-head">
+            <h2>Administrator dashboard</h2>
+            <p class="muted mb-0">Manage facilities, inventory, members, refunds and clubhouse settings.</p>
+        </div>
+
+        <div class="stat-row mb-4">
+            <div class="stat"><span class="muted">Bookings today</span><strong>@stats.BookingsToday</strong></div>
+            <div class="stat"><span class="muted">Pending approvals</span><strong>@stats.PendingApprovals</strong></div>
+            <div class="stat"><span class="muted">Active members</span><strong>@stats.ActiveMembers</strong></div>
+            <div class="stat"><span class="muted">Revenue (month)</span><strong>MYR @stats.RevenueThisMonth.ToString("0")</strong></div>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-lg-7">
+                <div class="panel">
+                    <div class="d-flex justify-content-between mb-3">
+                        <h3 class="h5 mb-0">Facilities & inventory</h3>
+                        <a asp-action="EditFacility">Add facility</a>
+                    </div>
+                    @foreach (var facility in facilities)
+                    {
+                        <div class="d-flex justify-content-between align-items-start gap-3 py-2 border-bottom">
+                            <div>
+                                <strong>@facility.Name</strong>
+                                <div class="small muted">@facility.Status · @facility.InventoryItems.Count inventory items · MYR @facility.HourlyRate.ToString("0.00")/hr</div>
+                            </div>
+                            <a asp-action="EditFacility" asp-route-id="@facility.Id">Edit</a>
+                        </div>
+                    }
+                </div>
+
+                <div class="panel mt-3">
+                    <h3 class="h5">Refund queue</h3>
+                    @if (!refunds.Any())
+                    {
+                        <p class="muted mb-0">No refund requests.</p>
+                    }
+                    else
+                    {
+                        @foreach (var refund in refunds)
+                        {
+                            <div class="d-flex justify-content-between align-items-center gap-2 py-2 border-bottom">
+                                <div>
+                                    <strong>@refund.Invoice?.InvoiceNumber</strong>
+                                    <div class="small muted">MYR @refund.Amount.ToString("0.00") · @refund.Status · @refund.Reason</div>
+                                </div>
+                                @if (refund.Status == RefundStatus.Pending || refund.Status == RefundStatus.Approved)
+                                {
+                                    <div class="d-flex gap-1">
+                                        <form asp-action="ProcessRefund" method="post">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="id" value="@refund.Id" />
+                                            <input type="hidden" name="approve" value="true" />
+                                            <button class="btn btn-sm btn-primary" type="submit">Approve</button>
+                                        </form>
+                                        <form asp-action="ProcessRefund" method="post">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="id" value="@refund.Id" />
+                                            <input type="hidden" name="approve" value="false" />
+                                            <button class="btn btn-sm btn-ghost" type="submit">Reject</button>
+                                        </form>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+
+            <div class="col-lg-5">
+                <div class="panel mb-3">
+                    <h3 class="h5">Members</h3>
+                    @foreach (var member in members)
+                    {
+                        <div class="d-flex justify-content-between py-1">
+                            <span>@member.FullName</span>
+                            <span class="badge-soft">@member.MembershipStatus</span>
+                        </div>
+                    }
+                </div>
+                <div class="panel">
+                    <h3 class="h5">Cancellation / refund policy</h3>
+                    @foreach (var setting in settings)
+                    {
+                        <form asp-action="UpdateSetting" method="post" class="row g-2 align-items-end mb-2">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@setting.Id" />
+                            <div class="col-7">
+                                <label class="form-label small mb-1">@setting.Key</label>
+                                <input class="form-control" name="value" value="@setting.Value" />
+                            </div>
+                            <div class="col-5">
+                                <button class="btn btn-ghost btn-sm w-100" type="submit">Save</button>
+                            </div>
+                        </form>
+                    }
+                    <a class="btn btn-primary btn-sm mt-2" asp-controller="Reports" asp-action="Index">Open reports</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

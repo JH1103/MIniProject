@@ -1,0 +1,47 @@
+@model Booking
+@{
+    ViewData["Title"] = $"Booking #{Model.Id}";
+}
+
+<section class="section">
+    <div class="container" style="max-width:860px">
+        <div class="section-head">
+            <h2>Booking #@Model.Id</h2>
+            <p class="muted mb-0">@Model.Facility?.Name · @Model.StartUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm") – @Model.EndUtc.ToLocalTime().ToString("HH:mm")</p>
+        </div>
+        <div class="panel">
+            <div class="row g-3">
+                <div class="col-md-4"><strong>Status</strong><div><span class="badge-soft">@Model.Status</span></div></div>
+                <div class="col-md-4"><strong>Amount</strong><div>MYR @Model.Amount.ToString("0.00")</div></div>
+                <div class="col-md-4"><strong>Hold expires</strong><div>@(Model.PaymentHoldExpiresAt?.ToLocalTime().ToString("dd MMM HH:mm") ?? "—")</div></div>
+            </div>
+            @if (Model.Guests.Any())
+            {
+                <hr />
+                <h3 class="h6">Registered guests</h3>
+                <ul>
+                    @foreach (var g in Model.Guests)
+                    {
+                        <li>@g.Guest?.FullName</li>
+                    }
+                </ul>
+            }
+            <div class="d-flex flex-wrap gap-2 mt-3">
+                @if (Model.Invoice is not null && Model.Invoice.Status == InvoiceStatus.Unpaid)
+                {
+                    <a class="btn btn-primary" asp-controller="Payments" asp-action="Pay" asp-route-id="@Model.Invoice.Id">Pay now</a>
+                }
+                @if (Model.Status is BookingStatus.Pending or BookingStatus.AwaitingPayment or BookingStatus.Confirmed)
+                {
+                    <form asp-action="Cancel" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model.Id" />
+                        <input type="hidden" name="reason" value="Cancelled by user" />
+                        <button class="btn btn-ghost" type="submit">Cancel booking</button>
+                    </form>
+                }
+                <a class="btn btn-ghost" asp-controller="Member" asp-action="Dashboard">Back to dashboard</a>
+            </div>
+        </div>
+    </div>
+</section>

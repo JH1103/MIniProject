@@ -1,0 +1,32 @@
+@model Invoice
+@{
+    ViewData["Title"] = "Receipt";
+}
+
+<section class="section">
+    <div class="container" style="max-width:720px">
+        <div class="panel">
+            <h2 class="h3">Payment confirmation</h2>
+            <p class="muted">Invoice @Model.InvoiceNumber · @Model.Status</p>
+            <div class="row g-3">
+                <div class="col-md-6"><strong>Amount</strong><div>MYR @Model.Amount.ToString("0.00")</div></div>
+                <div class="col-md-6"><strong>Paid at</strong><div>@(Model.PaidAt?.ToLocalTime().ToString("dd MMM yyyy HH:mm") ?? "—")</div></div>
+                <div class="col-12"><strong>Description</strong><div>@Model.Description</div></div>
+            </div>
+            @if (Model.Payments.Any())
+            {
+                <hr />
+                <h3 class="h6">Transactions</h3>
+                <ul class="mb-0">
+                    @foreach (var payment in Model.Payments)
+                    {
+                        <li>@payment.Method · @payment.Reference · MYR @payment.Amount.ToString("0.00")</li>
+                    }
+                </ul>
+            }
+            <div class="mt-4">
+                <a class="btn btn-ghost" asp-action="History">Payment history</a>
+            </div>
+        </div>
+    </div>
+</section>

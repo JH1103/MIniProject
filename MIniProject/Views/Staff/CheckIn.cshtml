@@ -1,0 +1,32 @@
+@{
+    ViewData["Title"] = "Guest check-in";
+    var pass = ViewBag.Pass as VisitorPass;
+}
+
+<section class="section">
+    <div class="container" style="max-width:640px">
+        <div class="section-head">
+            <h2>Guest check-in</h2>
+            <p class="muted mb-0">Scan or type a QR pass code to record arrival and departure.</p>
+        </div>
+        <form asp-action="CheckIn" method="post" class="panel">
+            @Html.AntiForgeryToken()
+            <div class="mb-3">
+                <label class="form-label">Pass code</label>
+                <input class="form-control" name="passCode" placeholder="GC-XXXXXXXX" required />
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-primary" name="actionType" value="in" type="submit">Check in</button>
+                <button class="btn btn-ghost" name="actionType" value="out" type="submit">Check out</button>
+            </div>
+        </form>
+        @if (pass is not null)
+        {
+            <div class="panel mt-3">
+                <h3 class="h6">Last scanned pass</h3>
+                <p class="mb-1"><strong>@pass.Guest?.FullName</strong> · @pass.PassCode</p>
+                <p class="muted mb-0">@pass.Booking?.Facility?.Name</p>
+            </div>
+        }
+    </div>
+</section>
