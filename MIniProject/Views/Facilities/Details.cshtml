@@ -1,0 +1,85 @@
+@model Facility
+@{
+    ViewData["Title"] = Model.Name;
+    var day = (DateTime)ViewBag.SelectedDate;
+    var slots = ViewBag.Slots as List<(DateTime Start, DateTime End, bool Available)> ?? new();
+}
+
+<section class="section">
+    <div class="container">
+        <div class="row g-4">
+            <div class="col-lg-6">
+                <img class="w-100 rounded-4 shadow" style="min-height:280px;object-fit:cover" src="@(Model.ImageUrl ?? "/images/function-hall.svg")" alt="@Model.Name" />
+            </div>
+            <div class="col-lg-6">
+                <div class="section-head mb-3">
+                    <span class="badge-soft mb-2">@Model.Category</span>
+                    <h2>@Model.Name</h2>
+                    <p class="muted">@Model.Description</p>
+                </div>
+                <div class="panel">
+                    <div class="row g-3">
+                        <div class="col-6"><strong>Capacity</strong><div class="muted">@Model.Capacity guests</div></div>
+                        <div class="col-6"><strong>Rate</strong><div class="muted">@(Model.HourlyRate == 0 ? "Member access" : $"MYR {Model.HourlyRate:0.00}/hr")</div></div>
+                        <div class="col-6"><strong>Hours</strong><div class="muted">@Model.OpenTime.ToString(@"hh\:mm") – @Model.CloseTime.ToString(@"hh\:mm")</div></div>
+                        <div class="col-6"><strong>Booking</strong><div class="muted">@(Model.BookingMode == BookingMode.ApprovalRequired ? "Approval required" : "Instant confirmation")</div></div>
+                    </div>
+                </div>
+                @if (Model.InventoryItems.Any())
+                {
+                    <div class="panel mt-3">
+                        <h3 class="h6">Inventory available with this facility</h3>
+                        <ul class="mb-0">
+                            @foreach (var item in Model.InventoryItems)
+                            {
+                                <li>@item.Name × @item.Quantity (@item.Condition)</li>
+                            }
+                        </ul>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="panel mt-4">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+                <div>
+                    <h3 class="h5 mb-1">Availability calendar</h3>
+                    <p class="muted mb-0">Select an open slot to start a reservation.</p>
+                </div>
+                <form method="get" class="d-flex gap-2 align-items-end">
+                    <div>
+                        <label class="form-label">Date</label>
+                        <input class="form-control" type="date" name="date" value="@day.ToString("yyyy-MM-dd")" onchange="this.form.submit()" />
+                    </div>
+                </form>
+            </div>
+            <div class="slot-grid">
+                @foreach (var slot in slots)
+                {
+                    if (slot.Available)
+                    {
+                        <a class="slot is-available"
+                           asp-controller="Bookings" asp-action="Create"
+                           asp-route-facilityId="@Model.Id"
+                           asp-route-date="@day.ToString("yyyy-MM-dd")"
+                           asp-route-start="@slot.Start.ToString("HH:mm")"
+                           asp-route-end="@slot.End.ToString("HH:mm")">
+                            @slot.Start.ToString("HH:mm") – @slot.End.ToString("HH:mm")
+                        </a>
+                    }
+                    else
+                    {
+                        <form asp-controller="Bookings" asp-action="JoinWaitingList" method="post" class="slot is-taken">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="facilityId" value="@Model.Id" />
+                            <input type="hidden" name="date" value="@day.ToString("yyyy-MM-dd")" />
+                            <input type="hidden" name="start" value="@slot.Start.ToString("HH:mm")" />
+                            <input type="hidden" name="end" value="@slot.End.ToString("HH:mm")" />
+                            <button type="submit" class="btn btn-link p-0 text-decoration-none" style="color:inherit">@slot.Start.ToString("HH:mm") waitlist</button>
+                        </form>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+</section>

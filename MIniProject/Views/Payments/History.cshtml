@@ -1,0 +1,49 @@
+@model List<Invoice>
+@{
+    ViewData["Title"] = "Invoices & payments";
+}
+
+<section class="section">
+    <div class="container">
+        <div class="section-head">
+            <h2>Invoices & payment history</h2>
+            <p class="muted mb-0">Downloadable receipts and unpaid invoices in one place.</p>
+        </div>
+        <div class="panel">
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead>
+                        <tr>
+                            <th>Invoice</th>
+                            <th>Description</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var invoice in Model)
+                    {
+                        <tr>
+                            <td>@invoice.InvoiceNumber</td>
+                            <td>@invoice.Description</td>
+                            <td>MYR @invoice.Amount.ToString("0.00")</td>
+                            <td><span class="badge-soft">@invoice.Status</span></td>
+                            <td class="text-end">
+                                @if (invoice.Status == InvoiceStatus.Unpaid)
+                                {
+                                    <a asp-action="Pay" asp-route-id="@invoice.Id">Pay</a>
+                                }
+                                else
+                                {
+                                    <a asp-action="Receipt" asp-route-id="@invoice.Id">Receipt</a>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</section>

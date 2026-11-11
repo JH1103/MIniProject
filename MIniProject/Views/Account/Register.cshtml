@@ -1,0 +1,48 @@
+@model RegisterViewModel
+@{
+    ViewData["Title"] = "Register";
+}
+
+<section class="auth-shell">
+    <div class="auth-card">
+        <h1 class="h3 mb-1">Create your account</h1>
+        <p class="muted mb-4">Join Greenwood Clubhouse to reserve facilities online.</p>
+        <form asp-action="Register" method="post">
+            <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+            <div class="mb-3">
+                <label asp-for="FullName" class="form-label"></label>
+                <input asp-for="FullName" class="form-control" />
+            </div>
+            <div class="mb-3">
+                <label asp-for="Email" class="form-label"></label>
+                <input asp-for="Email" class="form-control" />
+            </div>
+            <div class="mb-3">
+                <label asp-for="PhoneNumber" class="form-label"></label>
+                <input asp-for="PhoneNumber" class="form-control" />
+            </div>
+            <div class="mb-3">
+                <label asp-for="IdentificationNumber" class="form-label"></label>
+                <input asp-for="IdentificationNumber" class="form-control" />
+            </div>
+            <div class="mb-3">
+                <label asp-for="Password" class="form-label"></label>
+                <input asp-for="Password" class="form-control" />
+            </div>
+            <div class="mb-3">
+                <label asp-for="ConfirmPassword" class="form-label"></label>
+                <input asp-for="ConfirmPassword" class="form-control" />
+            </div>
+            <div class="form-check mb-3">
+                <input asp-for="PdpaConsent" class="form-check-input" />
+                <label asp-for="PdpaConsent" class="form-check-label"></label>
+            </div>
+            <button class="btn btn-primary w-100" type="submit">Register</button>
+        </form>
+        <div class="mt-3 small">Already a member? <a asp-action="Login">Sign in</a></div>
+    </div>
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

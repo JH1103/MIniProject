@@ -1,0 +1,92 @@
+@model MemberDashboardViewModel
+@{
+    ViewData["Title"] = "Member dashboard";
+}
+
+<section class="section">
+    <div class="container">
+        <div class="section-head">
+            <h2>Welcome, @Model.User.FullName</h2>
+            <p class="muted mb-0">
+                Membership:
+                @if (Model.Subscription?.MembershipPlan is not null)
+                {
+                    <span class="badge-soft">@Model.Subscription.MembershipPlan.Name · active until @Model.Subscription.EndDate.ToString("dd MMM yyyy")</span>
+                }
+                else
+                {
+                    <span class="badge-warn">No active plan</span>
+                    <a asp-controller="Membership" asp-action="Plans">Choose a plan</a>
+                }
+            </p>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-lg-7">
+                <div class="panel">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h3 class="h5 mb-0">Upcoming bookings</h3>
+                        <a asp-controller="Facilities" asp-action="Index">Book a facility</a>
+                    </div>
+                    @if (!Model.UpcomingBookings.Any())
+                    {
+                        <p class="muted mb-0">No upcoming reservations yet.</p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table mb-0">
+                                <thead><tr><th>Facility</th><th>When</th><th>Status</th><th></th></tr></thead>
+                                <tbody>
+                                @foreach (var booking in Model.UpcomingBookings)
+                                {
+                                    <tr>
+                                        <td>@booking.Facility?.Name</td>
+                                        <td>@booking.StartUtc.ToLocalTime().ToString("dd MMM HH:mm")</td>
+                                        <td><span class="badge-soft">@booking.Status</span></td>
+                                        <td><a asp-controller="Bookings" asp-action="Details" asp-route-id="@booking.Id">View</a></td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="panel mb-3">
+                    <h3 class="h5">Guest passes</h3>
+                    @if (!Model.Passes.Any())
+                    {
+                        <p class="muted mb-0">No active digital passes.</p>
+                    }
+                    else
+                    {
+                        <ul class="mb-0">
+                            @foreach (var pass in Model.Passes)
+                            {
+                                <li>
+                                    @pass.Guest?.FullName —
+                                    <a asp-controller="Guests" asp-action="Pass" asp-route-id="@pass.Id">QR pass</a>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div>
+                <div class="panel">
+                    <div class="d-flex justify-content-between mb-2">
+                        <h3 class="h5 mb-0">Payments</h3>
+                        <a asp-controller="Payments" asp-action="History">History</a>
+                    </div>
+                    @foreach (var invoice in Model.Invoices.Take(5))
+                    {
+                        <div class="d-flex justify-content-between gap-2 py-2 border-bottom">
+                            <span>@invoice.InvoiceNumber</span>
+                            <span>MYR @invoice.Amount.ToString("0.00") · @invoice.Status</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

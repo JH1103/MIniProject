@@ -1,0 +1,36 @@
+@{
+    ViewData["Title"] = "Contact & Announcements";
+    var announcements = ViewBag.Announcements as List<Announcement> ?? new();
+}
+
+<section class="section">
+    <div class="container">
+        <div class="section-head">
+            <h2>Contact & announcements</h2>
+            <p class="muted mb-0">Reach the clubhouse office or review current notices and house rules.</p>
+        </div>
+        <div class="row g-4">
+            <div class="col-lg-5">
+                <div class="panel">
+                    <h3 class="h5">Greenwood Clubhouse</h3>
+                    <p class="mb-2">Lot 12, Persiaran Community, 47301 Petaling Jaya</p>
+                    <p class="mb-2">Office hours: Mon–Sun, 8:00 AM – 8:00 PM</p>
+                    <p class="mb-2">Phone: +60 3-1234 5678</p>
+                    <p class="mb-0">Email: hello@greenwoodclubhouse.local</p>
+                </div>
+            </div>
+            <div class="col-lg-7">
+                @foreach (var item in announcements)
+                {
+                    <div class="panel mb-3">
+                        <div class="d-flex justify-content-between gap-3">
+                            <h3 class="h5 mb-2">@item.Title</h3>
+                            <span class="badge-soft">@item.PublishedAt.ToLocalTime().ToString("dd MMM yyyy")</span>
+                        </div>
+                        <p class="muted mb-0">@item.Body</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</section>

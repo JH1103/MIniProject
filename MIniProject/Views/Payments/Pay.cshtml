@@ -1,0 +1,38 @@
+@model Invoice
+@{
+    ViewData["Title"] = "Payment";
+}
+
+<section class="section">
+    <div class="container" style="max-width:720px">
+        <div class="section-head">
+            <h2>Complete payment</h2>
+            <p class="muted mb-0">Simulated local gateway supporting FPX, cards and e-wallets (MYR).</p>
+        </div>
+        <div class="panel">
+            <div class="row g-3 mb-4">
+                <div class="col-md-6"><strong>Invoice</strong><div>@Model.InvoiceNumber</div></div>
+                <div class="col-md-6"><strong>Amount</strong><div>MYR @Model.Amount.ToString("0.00")</div></div>
+                <div class="col-12"><strong>Description</strong><div>@Model.Description</div></div>
+                @if (Model.Booking?.Facility is not null)
+                {
+                    <div class="col-12 muted">@Model.Booking.Facility.Name · @Model.Booking.StartUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm")</div>
+                }
+            </div>
+            @if (Model.Status == InvoiceStatus.Unpaid || Model.Status == InvoiceStatus.Overdue)
+            {
+                <form asp-action="Pay" method="post" class="d-grid gap-2">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <button class="btn btn-primary" name="method" value="FPX" type="submit">Pay with FPX</button>
+                    <button class="btn btn-ghost" name="method" value="Card" type="submit">Pay with card</button>
+                    <button class="btn btn-ghost" name="method" value="E-Wallet" type="submit">Pay with e-wallet</button>
+                </form>
+            }
+            else
+            {
+                <a class="btn btn-primary" asp-action="Receipt" asp-route-id="@Model.Id">View receipt</a>
+            }
+        </div>
+    </div>
+</section>
