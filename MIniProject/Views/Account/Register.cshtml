@@ -7,36 +7,53 @@
     <div class="auth-card">
         <h1 class="h3 mb-1">Create your account</h1>
         <p class="muted mb-4">Join Greenwood Clubhouse to reserve facilities online.</p>
-        <form asp-action="Register" method="post">
-            <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+        <form asp-action="Register" method="post" novalidate>
+            <div asp-validation-summary="All" class="text-danger mb-3"></div>
+
             <div class="mb-3">
                 <label asp-for="FullName" class="form-label"></label>
-                <input asp-for="FullName" class="form-control" />
+                <input asp-for="FullName" class="form-control" autocomplete="name" />
+                <span asp-validation-for="FullName" class="text-danger"></span>
             </div>
+
             <div class="mb-3">
                 <label asp-for="Email" class="form-label"></label>
-                <input asp-for="Email" class="form-control" />
+                <input asp-for="Email" class="form-control" autocomplete="email" />
+                <span asp-validation-for="Email" class="text-danger"></span>
             </div>
+
             <div class="mb-3">
                 <label asp-for="PhoneNumber" class="form-label"></label>
-                <input asp-for="PhoneNumber" class="form-control" />
+                <input asp-for="PhoneNumber" class="form-control" autocomplete="tel" placeholder="e.g. 012-3456789" />
+                <span asp-validation-for="PhoneNumber" class="text-danger"></span>
             </div>
+
             <div class="mb-3">
                 <label asp-for="IdentificationNumber" class="form-label"></label>
-                <input asp-for="IdentificationNumber" class="form-control" />
+                <input asp-for="IdentificationNumber" class="form-control" placeholder="e.g. 900101-14-5678" />
+                <div class="form-text">Optional. Used to verify your identity for membership and clubhouse security (Malaysian NRIC or passport).</div>
+                <span asp-validation-for="IdentificationNumber" class="text-danger"></span>
             </div>
+
             <div class="mb-3">
                 <label asp-for="Password" class="form-label"></label>
-                <input asp-for="Password" class="form-control" />
+                <input asp-for="Password" class="form-control" autocomplete="new-password" />
+                <div class="form-text">At least 8 characters, with uppercase, lowercase and a number.</div>
+                <span asp-validation-for="Password" class="text-danger"></span>
             </div>
+
             <div class="mb-3">
                 <label asp-for="ConfirmPassword" class="form-label"></label>
-                <input asp-for="ConfirmPassword" class="form-control" />
+                <input asp-for="ConfirmPassword" class="form-control" autocomplete="new-password" />
+                <span asp-validation-for="ConfirmPassword" class="text-danger"></span>
             </div>
+
             <div class="form-check mb-3">
                 <input asp-for="PdpaConsent" class="form-check-input" />
                 <label asp-for="PdpaConsent" class="form-check-label"></label>
+                <div><span asp-validation-for="PdpaConsent" class="text-danger"></span></div>
             </div>
+
             <button class="btn btn-primary w-100" type="submit">Register</button>
         </form>
         <div class="mt-3 small">Already a member? <a asp-action="Login">Sign in</a></div>
