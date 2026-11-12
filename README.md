@@ -8,7 +8,7 @@ ASP.NET Core MVC (C# / .NET 10) implementation of a web-based clubhouse faciliti
 2. **Facility & Inventory Registry** — facilities, operating hours, prices, inventory, maintenance block-outs  
 3. **Membership & Subscription Management** — registration, plans, validity, tier-based privileges  
 4. **Visitor Access & Check-in** — guest registration, QR digital passes, staff check-in/out  
-5. **Payment & Billing Management** — invoices, simulated FPX/card/e-wallet payments, refund policy  
+5. **Payment & Billing Management** — invoices, card details form, e-wallet QR payment, refund policy  
 6. **Reporting & Analytics Management** — dashboards, usage charts, CSV export  
 
 ## Roles
@@ -25,7 +25,7 @@ ASP.NET Core MVC (C# / .NET 10) implementation of a web-based clubhouse faciliti
 - Entity Framework Core with SQLite (`clubhouse.db`)  
 - Bootstrap + custom clubhouse UI  
 - QRCoder for visitor passes  
-- Simulated payment gateway (MYR)
+- Simulated payments in MYR: card (enter details) or e-wallet (scan QR)
 
 ## Run locally
 

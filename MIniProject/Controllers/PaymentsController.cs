@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -5,6 +6,8 @@ using Microsoft.EntityFrameworkCore;
 using MIniProject.Data;
 using MIniProject.Models;
 using MIniProject.Services;
+using MIniProject.ViewModels;
+using QRCoder;
 
 namespace MIniProject.Controllers;
 
@@ -25,33 +28,42 @@ public class PaymentsController : Controller
     [HttpGet]
     public async Task<IActionResult> Pay(int id)
     {
-        var user = await _userManager.GetUserAsync(User);
-        if (user is null)
+        var (result, invoice) = await TryGetAuthorizedInvoiceAsync(id);
+        if (result is not null)
         {
-            return Challenge();
+            return result;
         }
 
-        var invoice = await _db.Invoices
-            .Include(i => i.Booking)!.ThenInclude(b => b!.Facility)
-            .Include(i => i.Subscription)!.ThenInclude(s => s!.MembershipPlan)
-            .FirstOrDefaultAsync(i => i.Id == id);
+        return View(new PaymentMethodViewModel { Invoice = invoice! });
+    }
 
-        if (invoice is null)
+    [HttpGet]
+    public async Task<IActionResult> PayCard(int id)
+    {
+        var (result, invoice) = await TryGetAuthorizedInvoiceAsync(id);
+        if (result is not null)
         {
-            return NotFound();
+            return result;
         }
 
-        var isStaff = User.IsInRole(AppRoles.Staff) || User.IsInRole(AppRoles.Administrator);
-        if (!isStaff && invoice.UserId != user.Id)
+        if (invoice!.Status is not InvoiceStatus.Unpaid and not InvoiceStatus.Overdue)
         {
-            return Forbid();
+            return RedirectToAction(nameof(Receipt), new { id });
         }
 
-        return View(invoice);
+        return View(new CardPaymentViewModel
+        {
+            InvoiceId = invoice.Id,
+            InvoiceNumber = invoice.InvoiceNumber,
+            Amount = invoice.Amount,
+            Description = invoice.Description,
+            ExpiryMonth = DateTime.Today.Month,
+            ExpiryYear = DateTime.Today.Year
+        });
     }
 
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> Pay(int id, string method)
+    public async Task<IActionResult> PayCard(CardPaymentViewModel model)
     {
         var user = await _userManager.GetUserAsync(User);
         if (user is null)
@@ -59,43 +71,104 @@ public class PaymentsController : Controller
             return Challenge();
         }
 
-        var (ok, error) = await _paymentService.PayInvoiceAsync(id, user.Id, method);
+        var (result, invoice) = await TryGetAuthorizedInvoiceAsync(model.InvoiceId);
+        if (result is not null)
+        {
+            return result;
+        }
+
+        model.InvoiceNumber = invoice!.InvoiceNumber;
+        model.Amount = invoice.Amount;
+        model.Description = invoice.Description;
+
+        ValidateCardDetails(model);
+        if (!ModelState.IsValid)
+        {
+            return View(model);
+        }
+
+        var digits = Regex.Replace(model.CardNumber, @"\D", string.Empty);
+        var last4 = digits[^4..];
+        var method = $"Card ending {last4}";
+
+        var (ok, error) = await _paymentService.PayInvoiceAsync(model.InvoiceId, user.Id, method);
         if (!ok)
         {
             TempData["Error"] = error;
-            return RedirectToAction(nameof(Pay), new { id });
+            return RedirectToAction(nameof(Pay), new { id = model.InvoiceId });
         }
 
-        TempData["Success"] = "Payment successful. A confirmation receipt is available in your history.";
+        TempData["Success"] = "Card payment successful. A confirmation receipt is available in your history.";
+        return RedirectToAction(nameof(Receipt), new { id = model.InvoiceId });
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> PayEWallet(int id)
+    {
+        var (result, invoice) = await TryGetAuthorizedInvoiceAsync(id);
+        if (result is not null)
+        {
+            return result;
+        }
+
+        if (invoice!.Status is not InvoiceStatus.Unpaid and not InvoiceStatus.Overdue)
+        {
+            return RedirectToAction(nameof(Receipt), new { id });
+        }
+
+        var reference = $"EW-{invoice.InvoiceNumber}-{invoice.Id}";
+        var payload = $"greenwood://pay?ref={reference}&amount={invoice.Amount:0.00}&currency=MYR&invoice={invoice.InvoiceNumber}";
+
+        using var generator = new QRCodeGenerator();
+        using var data = generator.CreateQrCode(payload, QRCodeGenerator.ECCLevel.Q);
+        var qr = new PngByteQRCode(data);
+
+        return View(new EWalletPaymentViewModel
+        {
+            InvoiceId = invoice.Id,
+            InvoiceNumber = invoice.InvoiceNumber,
+            Amount = invoice.Amount,
+            Description = invoice.Description,
+            PaymentReference = reference,
+            QrBase64 = Convert.ToBase64String(qr.GetGraphic(8))
+        });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> ConfirmEWallet(int id)
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null)
+        {
+            return Challenge();
+        }
+
+        var (result, _) = await TryGetAuthorizedInvoiceAsync(id);
+        if (result is not null)
+        {
+            return result;
+        }
+
+        var (ok, error) = await _paymentService.PayInvoiceAsync(id, user.Id, "E-Wallet");
+        if (!ok)
+        {
+            TempData["Error"] = error;
+            return RedirectToAction(nameof(PayEWallet), new { id });
+        }
+
+        TempData["Success"] = "E-wallet payment successful. A confirmation receipt is available in your history.";
         return RedirectToAction(nameof(Receipt), new { id });
     }
 
     public async Task<IActionResult> Receipt(int id)
     {
-        var user = await _userManager.GetUserAsync(User);
-        if (user is null)
+        var (result, invoice) = await TryGetAuthorizedInvoiceAsync(id, includePayments: true);
+        if (result is not null)
         {
-            return Challenge();
+            return result;
         }
 
-        var invoice = await _db.Invoices
-            .Include(i => i.Payments)
-            .Include(i => i.Booking)!.ThenInclude(b => b!.Facility)
-            .Include(i => i.Subscription)!.ThenInclude(s => s!.MembershipPlan)
-            .FirstOrDefaultAsync(i => i.Id == id);
-
-        if (invoice is null)
-        {
-            return NotFound();
-        }
-
-        var isStaff = User.IsInRole(AppRoles.Staff) || User.IsInRole(AppRoles.Administrator);
-        if (!isStaff && invoice.UserId != user.Id)
-        {
-            return Forbid();
-        }
-
-        return View(invoice);
+        return View(invoice!);
     }
 
     public async Task<IActionResult> History()
@@ -119,5 +192,85 @@ public class PaymentsController : Controller
 
         var invoices = await query.OrderByDescending(i => i.IssuedAt).ToListAsync();
         return View(invoices);
+    }
+
+    private async Task<(IActionResult? Result, Invoice? Invoice)> TryGetAuthorizedInvoiceAsync(int id, bool includePayments = false)
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null)
+        {
+            return (Challenge(), null);
+        }
+
+        IQueryable<Invoice> query = _db.Invoices
+            .Include(i => i.Booking)!.ThenInclude(b => b!.Facility)
+            .Include(i => i.Subscription)!.ThenInclude(s => s!.MembershipPlan);
+
+        if (includePayments)
+        {
+            query = query.Include(i => i.Payments);
+        }
+
+        var invoice = await query.FirstOrDefaultAsync(i => i.Id == id);
+        if (invoice is null)
+        {
+            return (NotFound(), null);
+        }
+
+        var isStaff = User.IsInRole(AppRoles.Staff) || User.IsInRole(AppRoles.Administrator);
+        if (!isStaff && invoice.UserId != user.Id)
+        {
+            return (Forbid(), null);
+        }
+
+        return (null, invoice);
+    }
+
+    private void ValidateCardDetails(CardPaymentViewModel model)
+    {
+        var digits = Regex.Replace(model.CardNumber ?? string.Empty, @"\D", string.Empty);
+        if (digits.Length is < 13 or > 19)
+        {
+            ModelState.AddModelError(nameof(model.CardNumber), "Card number must be 13 to 19 digits.");
+        }
+        else if (!PassesLuhn(digits))
+        {
+            ModelState.AddModelError(nameof(model.CardNumber), "Card number is invalid.");
+        }
+
+        var currentYear = DateTime.Today.Year;
+        var currentMonth = DateTime.Today.Month;
+        if (model.ExpiryYear < currentYear || (model.ExpiryYear == currentYear && model.ExpiryMonth < currentMonth))
+        {
+            ModelState.AddModelError(nameof(model.ExpiryMonth), "Card has expired.");
+        }
+
+        if (model.ExpiryYear > currentYear + 20)
+        {
+            ModelState.AddModelError(nameof(model.ExpiryYear), "Enter a valid expiry year.");
+        }
+    }
+
+    private static bool PassesLuhn(string digits)
+    {
+        var sum = 0;
+        var alternate = false;
+        for (var i = digits.Length - 1; i >= 0; i--)
+        {
+            var n = digits[i] - '0';
+            if (alternate)
+            {
+                n *= 2;
+                if (n > 9)
+                {
+                    n -= 9;
+                }
+            }
+
+            sum += n;
+            alternate = !alternate;
+        }
+
+        return sum % 10 == 0;
     }
 }
