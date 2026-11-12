@@ -1,0 +1,72 @@
+@model CardPaymentViewModel
+@{
+    ViewData["Title"] = "Pay by card";
+    var years = Enumerable.Range(DateTime.Today.Year, 16);
+}
+
+<section class="section">
+    <div class="container" style="max-width:640px">
+        <div class="section-head">
+            <h2>Pay by card</h2>
+            <p class="muted mb-0">Enter your card details to pay MYR @Model.Amount.ToString("0.00") for @Model.InvoiceNumber.</p>
+        </div>
+
+        <form asp-action="PayCard" method="post" class="panel" autocomplete="off">
+            @Html.AntiForgeryToken()
+            <input type="hidden" asp-for="InvoiceId" />
+            <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+            <div class="mb-3">
+                <label asp-for="CardholderName" class="form-label"></label>
+                <input asp-for="CardholderName" class="form-control" placeholder="Name as shown on card" />
+                <span asp-validation-for="CardholderName" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="CardNumber" class="form-label"></label>
+                <input asp-for="CardNumber" class="form-control" inputmode="numeric" maxlength="23" placeholder="ACCT-000035" />
+                <span asp-validation-for="CardNumber" class="text-danger"></span>
+                <div class="form-text">Demo tip: use <code>4111 1111 1111 1111</code></div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-4">
+                    <label asp-for="ExpiryMonth" class="form-label"></label>
+                    <select asp-for="ExpiryMonth" class="form-select">
+                        @for (var m = 1; m <= 12; m++)
+                        {
+                            <option value="@m">@m.ToString("00")</option>
+                        }
+                    </select>
+                    <span asp-validation-for="ExpiryMonth" class="text-danger"></span>
+                </div>
+                <div class="col-4">
+                    <label asp-for="ExpiryYear" class="form-label"></label>
+                    <select asp-for="ExpiryYear" class="form-select">
+                        @foreach (var y in years)
+                        {
+                            <option value="@y">@y</option>
+                        }
+                    </select>
+                    <span asp-validation-for="ExpiryYear" class="text-danger"></span>
+                </div>
+                <div class="col-4">
+                    <label asp-for="Cvv" class="form-label"></label>
+                    <input asp-for="Cvv" class="form-control" inputmode="numeric" maxlength="4" placeholder="123" />
+                    <span asp-validation-for="Cvv" class="text-danger"></span>
+                </div>
+            </div>
+
+            <p class="small muted mt-3 mb-0">Card details are validated for this payment only and are not saved on the server.</p>
+
+            <div class="d-flex flex-wrap gap-2 mt-4">
+                <button class="btn btn-primary" type="submit">Pay MYR @Model.Amount.ToString("0.00")</button>
+                <a class="btn btn-ghost" asp-action="Pay" asp-route-id="@Model.InvoiceId">Back</a>
+            </div>
+        </form>
+    </div>
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

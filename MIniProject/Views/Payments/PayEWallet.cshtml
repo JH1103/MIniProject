@@ -1,0 +1,37 @@
+@model EWalletPaymentViewModel
+@{
+    ViewData["Title"] = "Pay by e-wallet";
+}
+
+<section class="section">
+    <div class="container" style="max-width:640px">
+        <div class="section-head">
+            <h2>Pay by e-wallet</h2>
+            <p class="muted mb-0">Scan this QR code with your e-wallet app to pay MYR @Model.Amount.ToString("0.00").</p>
+        </div>
+
+        <div class="panel text-center ewallet-panel">
+            <div class="ewallet-qr">
+                @if (!string.IsNullOrEmpty(Model.QrBase64))
+                {
+                    <img alt="E-wallet payment QR code" src="data:image/png;base64,@Model.QrBase64" />
+                }
+            </div>
+            <p class="mt-3 mb-1"><strong>@Model.InvoiceNumber</strong></p>
+            <p class="muted mb-1">Amount: MYR @Model.Amount.ToString("0.00")</p>
+            <p class="small muted mb-0">Reference: @Model.PaymentReference</p>
+            <ol class="ewallet-steps text-start mt-4 mb-0">
+                <li>Open your e-wallet app (Touch ’n Go, GrabPay, Boost, etc.).</li>
+                <li>Scan the QR code above.</li>
+                <li>Confirm the amount, then tap the button below.</li>
+            </ol>
+        </div>
+
+        <form asp-action="ConfirmEWallet" method="post" class="mt-3 d-flex flex-wrap gap-2">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="id" value="@Model.InvoiceId" />
+            <button class="btn btn-primary" type="submit">I have scanned and paid</button>
+            <a class="btn btn-ghost" asp-action="Pay" asp-route-id="@Model.InvoiceId">Back</a>
+        </form>
+    </div>
+</section>
