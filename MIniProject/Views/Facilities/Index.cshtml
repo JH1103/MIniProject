@@ -28,7 +28,7 @@
                         <p class="muted small mb-2">@facility.Description</p>
                         <div class="facility-tile__meta">
                             <span>@facility.OpenTime.ToString(@"hh\:mm") – @facility.CloseTime.ToString(@"hh\:mm")</span>
-                            <span>@(facility.HourlyRate == 0 ? "Included" : $"MYR {facility.HourlyRate:0.00}/hr")</span>
+                            <span>@(facility.HourlyRate == 0 ? "Included" : $"MYR {facility.HourlyRate:N2}/hr")</span>
                         </div>
                     </div>
                 </a>

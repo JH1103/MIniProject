@@ -20,7 +20,7 @@
             <div class="stat"><span class="muted">Bookings today</span><strong>@Model.BookingsToday</strong></div>
             <div class="stat"><span class="muted">Active members</span><strong>@Model.ActiveMembers</strong></div>
             <div class="stat"><span class="muted">Pending approvals</span><strong>@Model.PendingApprovals</strong></div>
-            <div class="stat"><span class="muted">Revenue this month</span><strong>MYR @Model.RevenueThisMonth.ToString("0.00")</strong></div>
+            <div class="stat"><span class="muted">Revenue this month</span><strong>MYR @Model.RevenueThisMonth.ToString("N2")</strong></div>
         </div>
 
         <div class="row g-4">
@@ -88,7 +88,7 @@
                     {
                         <div class="d-flex justify-content-between py-2 border-bottom">
                             <span>@payment.Reference</span>
-                            <span>MYR @payment.Amount.ToString("0.00")</span>
+                            <span>MYR @payment.Amount.ToString("N2")</span>
                         </div>
                     }
                 </div>

@@ -9,7 +9,7 @@
             <h2 class="h3">Payment confirmation</h2>
             <p class="muted">Invoice @Model.InvoiceNumber · @Model.Status</p>
             <div class="row g-3">
-                <div class="col-md-6"><strong>Amount</strong><div>MYR @Model.Amount.ToString("0.00")</div></div>
+                <div class="col-md-6"><strong>Amount</strong><div>MYR @Model.Amount.ToString("N2")</div></div>
                 <div class="col-md-6"><strong>Paid at</strong><div>@(Model.PaidAt?.ToLocalTime().ToString("dd MMM yyyy HH:mm") ?? "—")</div></div>
                 <div class="col-12"><strong>Description</strong><div>@Model.Description</div></div>
             </div>
@@ -20,7 +20,7 @@
                 <ul class="mb-0">
                     @foreach (var payment in Model.Payments)
                     {
-                        <li>@payment.Method · @payment.Reference · MYR @payment.Amount.ToString("0.00")</li>
+                        <li>@payment.Method · @payment.Reference · MYR @payment.Amount.ToString("N2")</li>
                     }
                 </ul>
             }
