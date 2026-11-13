@@ -136,6 +136,25 @@ a:hover { color: var(--lagoon); }
 }
 .muted { color: rgba(20, 35, 28, 0.68); }
 
+.facility-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem 1.25rem;
+}
+.facility-filters__mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+.facility-mode-select {
+  min-width: 12.5rem;
+  width: auto;
+  border-radius: 999px;
+  padding-inline: 0.95rem;
+}
+
 .facility-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -156,11 +175,32 @@ a:hover { color: var(--lagoon); }
   box-shadow: 0 22px 50px rgba(18, 53, 40, 0.16);
   color: inherit;
 }
+.facility-tile__media {
+  position: relative;
+}
 .facility-tile img {
   width: 100%;
   height: 180px;
   object-fit: cover;
   display: block;
+}
+.facility-tile__mode {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  padding: 0.28rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #fff;
+  backdrop-filter: blur(4px);
+}
+.facility-tile__mode.is-instant {
+  background: rgba(31, 122, 84, 0.92);
+}
+.facility-tile__mode.is-approval {
+  background: rgba(176, 98, 36, 0.94);
 }
 .facility-tile__body { padding: 1.1rem 1.2rem 1.3rem; }
 .facility-tile__meta {

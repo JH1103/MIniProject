@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MIniProject.Data;
+using MIniProject.Models;
 using MIniProject.Services;
 
 namespace MIniProject.Controllers;
@@ -16,16 +17,28 @@ public class FacilitiesController : Controller
         _bookingService = bookingService;
     }
 
-    public async Task<IActionResult> Index(string? category)
+    public async Task<IActionResult> Index(string? category, string? mode)
     {
+        var selectedMode = NormalizeMode(mode);
         var query = _db.Facilities.Where(f => f.IsActive).AsQueryable();
+
         if (!string.IsNullOrWhiteSpace(category))
         {
             query = query.Where(f => f.Category == category);
         }
 
+        if (selectedMode == "instant")
+        {
+            query = query.Where(f => f.BookingMode == BookingMode.InstantConfirmation);
+        }
+        else if (selectedMode == "approval")
+        {
+            query = query.Where(f => f.BookingMode == BookingMode.ApprovalRequired);
+        }
+
         ViewBag.Categories = await _db.Facilities.Where(f => f.IsActive).Select(f => f.Category).Distinct().OrderBy(c => c).ToListAsync();
         ViewBag.SelectedCategory = category;
+        ViewBag.SelectedMode = selectedMode;
         return View(await query.OrderBy(f => f.Name).ToListAsync());
     }
 
@@ -55,5 +68,20 @@ public class FacilitiesController : Controller
         ViewBag.SelectedDate = day;
         ViewBag.Slots = _bookingService.GetDaySlots(facility, day, bookings, blockOuts);
         return View(facility);
+    }
+
+    private static string? NormalizeMode(string? mode)
+    {
+        if (string.IsNullOrWhiteSpace(mode))
+        {
+            return null;
+        }
+
+        return mode.Trim().ToLowerInvariant() switch
+        {
+            "instant" or "instantconfirmation" or "instant-confirmation" => "instant",
+            "approval" or "approvalrequired" or "approval-required" => "approval",
+            _ => null
+        };
     }
 }
