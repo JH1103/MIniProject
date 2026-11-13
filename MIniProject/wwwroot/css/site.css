@@ -94,7 +94,7 @@ a:hover { color: var(--lagoon); }
   color: #f7fbf8;
   background:
     linear-gradient(120deg, rgba(18, 53, 40, 0.88) 12%, rgba(18, 53, 40, 0.35) 48%, rgba(18, 53, 40, 0.15) 100%),
-    url('/images/hero-clubhouse.svg') center/cover no-repeat;
+    url('/images/hero-kota-permai.jpg') center/cover no-repeat;
 }
 .hero__content {
   position: relative;

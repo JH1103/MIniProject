@@ -6,9 +6,9 @@
 
 <section class="hero">
     <div class="container hero__content">
-        <span class="hero__eyebrow">Community clubhouse reservations</span>
-        <h1>Greenwood Clubhouse</h1>
-        <p>Browse facilities, reserve time slots, register guests and pay online — without phone calls or office-hour visits.</p>
+        <span class="hero__eyebrow">Kota Kemuning · Shah Alam</span>
+        <h1>Kota Permai Golf &amp; Country Club</h1>
+        <p>Reserve badminton, tennis, squash, pickleball, pools, gym, driving range bays and banquet rooms online — inspired by Kota Permai’s real club facilities.</p>
         <div class="hero__actions">
             <a class="btn btn-primary" asp-controller="Facilities" asp-action="Index">Browse facilities</a>
             <a class="btn btn-ghost" style="color:#fff;border-color:rgba(255,255,255,.35)" asp-controller="Account" asp-action="Register">Become a member</a>
@@ -20,13 +20,13 @@
     <div class="container">
         <div class="section-head">
             <h2>Featured facilities</h2>
-            <p class="muted mb-0">Function hall, badminton, meeting rooms, swimming pool and barbecue areas — ready to reserve online.</p>
+            <p class="muted mb-0">Sports courts, Olympic lap pool, gym, driving range and Permai Ballroom — ready to reserve online.</p>
         </div>
         <div class="facility-grid">
             @foreach (var facility in Model)
             {
                 <a class="facility-tile" asp-controller="Facilities" asp-action="Details" asp-route-id="@facility.Id">
-                    <img src="@(facility.ImageUrl ?? "/images/function-hall.svg")" alt="@facility.Name" />
+                    <img src="@(facility.ImageUrl ?? "/images/facility-ballroom.jpg")" alt="@facility.Name" />
                     <div class="facility-tile__body">
                         <h3 class="h5 mb-2">@facility.Name</h3>
                         <div class="facility-tile__meta">
@@ -46,7 +46,7 @@
         <div class="container">
             <div class="section-head">
                 <h2>Announcements</h2>
-                <p class="muted mb-0">Clubhouse notices and operating updates.</p>
+                <p class="muted mb-0">Club notices and operating updates.</p>
             </div>
             <div class="row g-3">
                 @foreach (var item in announcements)

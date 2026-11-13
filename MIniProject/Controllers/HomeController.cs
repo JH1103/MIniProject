@@ -20,7 +20,7 @@ public class HomeController : Controller
         var facilities = await _db.Facilities
             .Where(f => f.IsActive)
             .OrderBy(f => f.Name)
-            .Take(5)
+            .Take(8)
             .ToListAsync();
 
         var announcements = await _db.Announcements

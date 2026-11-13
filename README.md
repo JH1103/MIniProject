@@ -1,45 +1,55 @@
-# Greenwood Clubhouse — Facilities Booking System
+# Kota Permai Golf & Country Club — Facilities Booking System
 
-ASP.NET Core MVC (C# / .NET 10) implementation of a web-based clubhouse facilities booking platform.
+ASP.NET Core MVC (C# / .NET 10) booking platform inspired by **Kota Permai Golf & Country Club** (Kota Kemuning, Shah Alam).
+
+## Facilities seeded from the club
+
+| Facility | Category |
+|----------|----------|
+| Permai Ballroom | Banquet |
+| Danau Function Room | Meeting |
+| VIP Room | Meeting |
+| Indoor Badminton Court | Sports |
+| Tennis Court | Sports |
+| Squash Court | Sports |
+| Pickleball Court | Sports |
+| Table Tennis | Sports |
+| Olympic Lap Pool | Sports |
+| Gymnasium | Sports |
+| Driving Range Bay | Golf |
+| Multi-Purpose Room | Leisure |
+
+Photos are stored under `MIniProject/wwwroot/images/`.
 
 ## Modules
 
-1. **Booking Management** — browse availability, reserve slots, waiting list, approval workflow, temporary payment holds  
-2. **Facility & Inventory Registry** — facilities, operating hours, prices, inventory, maintenance block-outs  
-3. **Membership & Subscription Management** — registration, plans, validity, tier-based privileges  
-4. **Visitor Access & Check-in** — guest registration, QR digital passes, staff check-in/out  
-5. **Payment & Billing Management** — invoices, card details form, e-wallet QR payment, refund policy  
-6. **Reporting & Analytics Management** — dashboards, usage charts, CSV export  
+1. Booking Management  
+2. Facility & Inventory Registry  
+3. Membership & Subscription  
+4. Visitor Access & Check-in  
+5. Payment & Billing (card details / e-wallet QR)  
+6. Reporting & Analytics  
 
-## Roles
+## Demo accounts
 
-| Role | Demo login |
-|------|------------|
-| Member | `member@clubhouse.local` / `Member@12345` |
-| Staff | `staff@clubhouse.local` / `Staff@12345` |
-| Administrator | `admin@clubhouse.local` / `Admin@12345` |
+| Role | Email | Password |
+|------|-------|----------|
+| Member | `member@kotapermai.local` | `Member@12345` |
+| Staff | `staff@kotapermai.local` | `Staff@12345` |
+| Administrator | `admin@kotapermai.local` | `Admin@12345` |
 
-## Stack
+Legacy `@clubhouse.local` accounts still work.
 
-- ASP.NET Core MVC + Identity  
-- Entity Framework Core with SQLite (`clubhouse.db`)  
-- Bootstrap + custom clubhouse UI  
-- QRCoder for visitor passes  
-- Simulated payments in MYR: card (enter details) or e-wallet (scan QR)
-
-## Run locally
+## Run
 
 ```bash
 cd MIniProject
-dotnet restore
-dotnet run
+# Optional: delete clubhouse.db to force a clean Kota Permai seed
+dotnet run --launch-profile http
 ```
 
-Open the printed URL (typically `http://localhost:5xxx`).
+Data is stored in SQLite: `MIniProject/clubhouse.db`.
 
-## Notes
+## Reference
 
-- Single clubhouse scope; English UI; MYR currency  
-- PDPA consent captured at registration  
-- Slot holds expire after the facility’s configured minutes (default 15)  
-- Refund defaults: 48h full / 24–48h half / &lt;24h none (admin-configurable)
+Club information based on [kotapermai.com.my](https://www.kotapermai.com.my/).

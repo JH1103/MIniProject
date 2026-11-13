@@ -117,7 +117,7 @@ public class PaymentsController : Controller
         }
 
         var reference = $"EW-{invoice.InvoiceNumber}-{invoice.Id}";
-        var payload = $"greenwood://pay?ref={reference}&amount={invoice.Amount:0.00}&currency=MYR&invoice={invoice.InvoiceNumber}";
+        var payload = $"kotapermai://pay?ref={reference}&amount={invoice.Amount:0.00}&currency=MYR&invoice={invoice.InvoiceNumber}";
 
         using var generator = new QRCodeGenerator();
         using var data = generator.CreateQrCode(payload, QRCodeGenerator.ECCLevel.Q);
