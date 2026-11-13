@@ -13,7 +13,7 @@
         <div class="panel mb-3">
             <div class="row g-3">
                 <div class="col-md-6"><strong>Invoice</strong><div>@invoice.InvoiceNumber</div></div>
-                <div class="col-md-6"><strong>Amount</strong><div>MYR @invoice.Amount.ToString("0.00")</div></div>
+                <div class="col-md-6"><strong>Amount</strong><div>MYR @invoice.Amount.ToString("N2")</div></div>
                 <div class="col-12"><strong>Description</strong><div>@invoice.Description</div></div>
                 @if (invoice.Booking?.Facility is not null)
                 {

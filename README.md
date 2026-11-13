@@ -21,6 +21,16 @@ ASP.NET Core MVC (C# / .NET 10) booking platform inspired by **Kota Permai Golf 
 
 Photos are stored under `MIniProject/wwwroot/images/`.
 
+### Sample pricing (MYR)
+
+| Membership | Annual fee |
+|------------|------------|
+| Individual | 7,000 |
+| Family | 12,500 |
+| Premium | 35,000 |
+
+Facility hourly rates range from member-included (pool/gym) to sports courts (~RM12–45/hr), driving range (RM48/hr), function rooms (RM180–380/hr) and Permai Ballroom (RM1,200/hr).
+
 ## Modules
 
 1. Booking Management  

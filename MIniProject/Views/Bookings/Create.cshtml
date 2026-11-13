@@ -11,7 +11,7 @@
                 @(Model.BookingMode == BookingMode.ApprovalRequired
                     ? "This facility requires staff approval before payment."
                     : "Instant confirmation after successful payment.")
-                Rate: MYR @Model.HourlyRate.ToString("0.00")/hr
+                Rate: MYR @Model.HourlyRate.ToString("N2")/hr
             </p>
         </div>
         <form asp-action="Create" method="post" class="panel">

@@ -8,7 +8,7 @@
     <div class="container" style="max-width:640px">
         <div class="section-head">
             <h2>Pay by card</h2>
-            <p class="muted mb-0">Enter your card details to pay MYR @Model.Amount.ToString("0.00") for @Model.InvoiceNumber.</p>
+            <p class="muted mb-0">Enter your card details to pay MYR @Model.Amount.ToString("N2") for @Model.InvoiceNumber.</p>
         </div>
 
         <form asp-action="PayCard" method="post" class="panel" autocomplete="off">
@@ -60,7 +60,7 @@
             <p class="small muted mt-3 mb-0">Card details are validated for this payment only and are not saved on the server.</p>
 
             <div class="d-flex flex-wrap gap-2 mt-4">
-                <button class="btn btn-primary" type="submit">Pay MYR @Model.Amount.ToString("0.00")</button>
+                <button class="btn btn-primary" type="submit">Pay MYR @Model.Amount.ToString("N2")</button>
                 <a class="btn btn-ghost" asp-action="Pay" asp-route-id="@Model.InvoiceId">Back</a>
             </div>
         </form>

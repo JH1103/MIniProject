@@ -20,7 +20,7 @@
                 <div class="panel">
                     <div class="row g-3">
                         <div class="col-6"><strong>Capacity</strong><div class="muted">@Model.Capacity guests</div></div>
-                        <div class="col-6"><strong>Rate</strong><div class="muted">@(Model.HourlyRate == 0 ? "Member access" : $"MYR {Model.HourlyRate:0.00}/hr")</div></div>
+                        <div class="col-6"><strong>Rate</strong><div class="muted">@(Model.HourlyRate == 0 ? "Member access" : $"MYR {Model.HourlyRate:N2}/hr")</div></div>
                         <div class="col-6"><strong>Hours</strong><div class="muted">@Model.OpenTime.ToString(@"hh\:mm") – @Model.CloseTime.ToString(@"hh\:mm")</div></div>
                         <div class="col-6"><strong>Booking</strong><div class="muted">@(Model.BookingMode == BookingMode.ApprovalRequired ? "Approval required" : "Instant confirmation")</div></div>
                     </div>
