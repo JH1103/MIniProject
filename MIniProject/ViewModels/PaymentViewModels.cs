@@ -22,7 +22,7 @@ public class CardPaymentViewModel
 
     [Required(ErrorMessage = "Card number is required.")]
     [Display(Name = "Card number")]
-    [RegularExpression(@"^[\d\s]{13,23}$", ErrorMessage = "Enter a valid card number.")]
+    [RegularExpression(@"^(\d{4}\s){3}\d{4}$|^\d{16}$", ErrorMessage = "Enter a 16-digit card number.")]
     public string CardNumber { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Expiry month is required.")]

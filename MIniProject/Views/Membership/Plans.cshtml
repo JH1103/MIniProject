@@ -24,11 +24,7 @@
                         </ul>
                         @if (User.Identity?.IsAuthenticated == true)
                         {
-                            <form asp-action="Subscribe" method="post">
-                                @Html.AntiForgeryToken()
-                                <input type="hidden" name="planId" value="@plan.Id" />
-                                <button class="btn btn-primary" type="submit">Subscribe</button>
-                            </form>
+                            <a class="btn btn-primary" asp-action="Subscribe" asp-route-planId="@plan.Id">Subscribe</a>
                         }
                         else
                         {

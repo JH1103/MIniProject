@@ -17,6 +17,7 @@ public static class DbSeeder
         var roleManager = sp.GetRequiredService<RoleManager<IdentityRole>>();
 
         await db.Database.EnsureCreatedAsync();
+        await EnsureSubscriptionSchemaAsync(db);
 
         foreach (var role in AppRoles.All)
         {
@@ -479,12 +480,61 @@ public static class DbSeeder
                     MembershipPlanId = plan.Id,
                     StartDate = DateTime.UtcNow.Date,
                     EndDate = DateTime.UtcNow.Date.AddYears(1),
-                    Status = MembershipStatus.Active
+                    Status = MembershipStatus.Active,
+                    AutoRenew = true
                 });
                 user.MembershipStatus = MembershipStatus.Active;
                 await userManager.UpdateAsync(user);
                 await db.SaveChangesAsync();
             }
+        }
+    }
+
+    /// <summary>
+    /// EnsureCreated does not add new columns to an existing SQLite database.
+    /// Keep Subscription.AutoRenew / CancelledAt available for upgraded installs.
+    /// </summary>
+    private static async Task EnsureSubscriptionSchemaAsync(ApplicationDbContext db)
+    {
+        if (!db.Database.IsSqlite())
+        {
+            return;
+        }
+
+        await db.Database.OpenConnectionAsync();
+        try
+        {
+            var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            await using (var cmd = db.Database.GetDbConnection().CreateCommand())
+            {
+                cmd.CommandText = "PRAGMA table_info('Subscriptions');";
+                await using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    columns.Add(reader.GetString(1));
+                }
+            }
+
+            if (columns.Count == 0)
+            {
+                return;
+            }
+
+            if (!columns.Contains("AutoRenew"))
+            {
+                await db.Database.ExecuteSqlRawAsync(
+                    "ALTER TABLE \"Subscriptions\" ADD COLUMN \"AutoRenew\" INTEGER NOT NULL DEFAULT 0;");
+            }
+
+            if (!columns.Contains("CancelledAt"))
+            {
+                await db.Database.ExecuteSqlRawAsync(
+                    "ALTER TABLE \"Subscriptions\" ADD COLUMN \"CancelledAt\" TEXT NULL;");
+            }
+        }
+        finally
+        {
+            await db.Database.CloseConnectionAsync();
         }
     }
 }

@@ -12,6 +12,8 @@
                 @if (Model.Subscription?.MembershipPlan is not null)
                 {
                     <span class="badge-soft">@Model.Subscription.MembershipPlan.Name · active until @Model.Subscription.EndDate.ToString("dd MMM yyyy")</span>
+                    <span class="badge-soft ms-1">Auto-renew @(Model.Subscription.AutoRenew && Model.Subscription.CancelledAt is null ? "on" : "off")</span>
+                    <a class="ms-2" asp-controller="Membership" asp-action="Manage">Manage / unsubscribe</a>
                 }
                 else
                 {
