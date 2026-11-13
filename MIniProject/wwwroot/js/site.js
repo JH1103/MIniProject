@@ -13,6 +13,27 @@
     tile.style.animationDelay = `${index * 70}ms`;
   });
 
+  document.querySelectorAll('[data-password-toggle]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const field = button.closest('.password-field');
+      const input = field?.querySelector('input');
+      if (!input) return;
+
+      const showing = input.type === 'text';
+      input.type = showing ? 'password' : 'text';
+      button.setAttribute('aria-pressed', showing ? 'false' : 'true');
+      button.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+      button.setAttribute('title', showing ? 'Show password' : 'Hide password');
+
+      const eye = button.querySelector('.icon-eye');
+      const eyeOff = button.querySelector('.icon-eye-off');
+      if (eye && eyeOff) {
+        eye.hidden = !showing;
+        eyeOff.hidden = showing;
+      }
+    });
+  });
+
   const cardInput = document.querySelector('[data-card-number="true"]');
   if (cardInput) {
     const status = document.getElementById('cardNumberStatus');
