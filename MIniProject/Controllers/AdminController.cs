@@ -19,13 +19,34 @@ public class AdminController : Controller
         _reportService = reportService;
     }
 
-    public async Task<IActionResult> Index()
+    public async Task<IActionResult> Index(string? tab)
     {
+        var selectedTab = string.IsNullOrWhiteSpace(tab) ? "facilities" : tab.Trim().ToLowerInvariant();
+        ViewBag.SelectedTab = selectedTab;
         ViewBag.Stats = await _reportService.GetDashboardStatsAsync();
         ViewBag.Facilities = await _db.Facilities.Include(f => f.InventoryItems).OrderBy(f => f.Name).ToListAsync();
-        ViewBag.Members = await _db.Users.OrderBy(u => u.FullName).Take(20).ToListAsync();
-        ViewBag.Refunds = await _db.RefundRequests.Include(r => r.Invoice).OrderByDescending(r => r.RequestedAt).Take(10).ToListAsync();
+        ViewBag.Members = await _db.Users.OrderBy(u => u.FullName).Take(40).ToListAsync();
+        ViewBag.Plans = await _db.MembershipPlans.Where(p => p.IsActive).OrderBy(p => p.AnnualFee).ToListAsync();
+        ViewBag.Subscriptions = await _db.Subscriptions
+            .Include(s => s.MembershipPlan)
+            .Include(s => s.User)
+            .OrderByDescending(s => s.CreatedAt)
+            .Take(30)
+            .ToListAsync();
+        ViewBag.Bookings = await _db.Bookings
+            .Include(b => b.Facility)
+            .Include(b => b.Member)
+            .OrderByDescending(b => b.CreatedAt)
+            .Take(30)
+            .ToListAsync();
+        ViewBag.Invoices = await _db.Invoices
+            .Include(i => i.User)
+            .OrderByDescending(i => i.IssuedAt)
+            .Take(30)
+            .ToListAsync();
+        ViewBag.Refunds = await _db.RefundRequests.Include(r => r.Invoice).OrderByDescending(r => r.RequestedAt).Take(20).ToListAsync();
         ViewBag.Settings = await _db.SystemSettings.OrderBy(s => s.Key).ToListAsync();
+        ViewBag.AuditLogs = await _db.AuditLogs.OrderByDescending(a => a.CreatedAt).Take(40).ToListAsync();
         return View();
     }
 
@@ -78,7 +99,29 @@ public class AdminController : Controller
 
         await _db.SaveChangesAsync();
         TempData["Success"] = "Facility saved.";
-        return RedirectToAction(nameof(Index));
+        return RedirectToAction(nameof(Index), new { tab = "facilities" });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> SetFacilityStatus(int id, FacilityStatus status)
+    {
+        var facility = await _db.Facilities.FirstOrDefaultAsync(f => f.Id == id);
+        if (facility is null)
+        {
+            return NotFound();
+        }
+
+        facility.Status = status;
+        _db.AuditLogs.Add(new AuditLog
+        {
+            UserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
+            Action = "FacilityStatusChanged",
+            Entity = $"Facility:{facility.Id}",
+            Details = $"{facility.Name} → {status}"
+        });
+        await _db.SaveChangesAsync();
+        TempData["Success"] = $"{facility.Name} marked as {status}.";
+        return RedirectToAction(nameof(Index), new { tab = "facilities" });
     }
 
     [HttpPost, ValidateAntiForgeryToken]
@@ -131,7 +174,7 @@ public class AdminController : Controller
 
         await _db.SaveChangesAsync();
         TempData["Success"] = approve ? "Refund approved." : "Refund rejected.";
-        return RedirectToAction(nameof(Index));
+        return RedirectToAction(nameof(Index), new { tab = "invoices" });
     }
 
     [HttpPost, ValidateAntiForgeryToken]
@@ -146,6 +189,6 @@ public class AdminController : Controller
         setting.Value = value;
         await _db.SaveChangesAsync();
         TempData["Success"] = "Setting updated.";
-        return RedirectToAction(nameof(Index));
+        return RedirectToAction(nameof(Index), new { tab = "audit" });
     }
 }

@@ -1,113 +1,315 @@
 @{
-    ViewData["Title"] = "Admin";
+    ViewData["Title"] = "Admin governance";
     var stats = ViewBag.Stats as DashboardStats ?? new();
     var facilities = ViewBag.Facilities as List<Facility> ?? new();
     var members = ViewBag.Members as List<ApplicationUser> ?? new();
+    var plans = ViewBag.Plans as List<MembershipPlan> ?? new();
+    var subscriptions = ViewBag.Subscriptions as List<Subscription> ?? new();
+    var bookings = ViewBag.Bookings as List<Booking> ?? new();
+    var invoices = ViewBag.Invoices as List<Invoice> ?? new();
     var refunds = ViewBag.Refunds as List<RefundRequest> ?? new();
     var settings = ViewBag.Settings as List<SystemSetting> ?? new();
+    var audits = ViewBag.AuditLogs as List<AuditLog> ?? new();
+    var tab = (ViewBag.SelectedTab as string) ?? "facilities";
+    var adminName = User.Identity?.Name ?? "Administrator";
 }
 
-<section class="section">
+<section class="section admin-console">
     <div class="container">
-        <div class="section-head">
-            <h2>Administrator dashboard</h2>
-            <p class="muted mb-0">Manage facilities, inventory, members, refunds and clubhouse settings.</p>
-        </div>
-
-        <div class="stat-row mb-4">
-            <div class="stat"><span class="muted">Bookings today</span><strong>@stats.BookingsToday</strong></div>
-            <div class="stat"><span class="muted">Pending approvals</span><strong>@stats.PendingApprovals</strong></div>
-            <div class="stat"><span class="muted">Active members</span><strong>@stats.ActiveMembers</strong></div>
-            <div class="stat"><span class="muted">Revenue (month)</span><strong>MYR @stats.RevenueThisMonth.ToString("N0")</strong></div>
-        </div>
-
-        <div class="row g-4">
-            <div class="col-lg-7">
-                <div class="panel">
-                    <div class="d-flex justify-content-between mb-3">
-                        <h3 class="h5 mb-0">Facilities & inventory</h3>
-                        <a asp-action="EditFacility">Add facility</a>
-                    </div>
-                    @foreach (var facility in facilities)
-                    {
-                        <div class="d-flex justify-content-between align-items-start gap-3 py-2 border-bottom">
-                            <div>
-                                <strong>@facility.Name</strong>
-                                <div class="small muted">@facility.Status · @facility.InventoryItems.Count inventory items · MYR @facility.HourlyRate.ToString("N2")/hr</div>
-                            </div>
-                            <a asp-action="EditFacility" asp-route-id="@facility.Id">Edit</a>
-                        </div>
-                    }
+        <div class="admin-hero">
+            <div class="admin-hero__copy">
+                <div class="admin-hero__eyebrow">Modules 1–6 · Centralised management console</div>
+                <span class="badge-soft">Admin governance</span>
+                <h1>Kota Permai Clubhouse Administration</h1>
+                <p class="mb-0">Signed in as @adminName · manage facilities, memberships, bookings, invoices and audit history.</p>
+            </div>
+            <div class="admin-hero__stats">
+                <div>
+                    <span>Facilities</span>
+                    <strong>@stats.TotalFacilities listed</strong>
                 </div>
+                <div>
+                    <span>Registered members</span>
+                    <strong>@stats.RegisteredMembers accounts</strong>
+                </div>
+                <div>
+                    <span>Revenue this month</span>
+                    <strong>MYR @stats.RevenueThisMonth.ToString("N2")</strong>
+                </div>
+            </div>
+        </div>
 
-                <div class="panel mt-3">
-                    <h3 class="h5">Refund queue</h3>
-                    @if (!refunds.Any())
-                    {
-                        <p class="muted mb-0">No refund requests.</p>
-                    }
-                    else
-                    {
-                        @foreach (var refund in refunds)
-                        {
-                            <div class="d-flex justify-content-between align-items-center gap-2 py-2 border-bottom">
-                                <div>
-                                    <strong>@refund.Invoice?.InvoiceNumber</strong>
-                                    <div class="small muted">MYR @refund.Amount.ToString("N2") · @refund.Status · @refund.Reason</div>
+        <nav class="admin-tabs" aria-label="Admin sections">
+            <a class="@(tab == "facilities" ? "is-active" : null)" asp-action="Index" asp-route-tab="facilities">Facility &amp; inventory</a>
+            <a class="@(tab == "membership" ? "is-active" : null)" asp-action="Index" asp-route-tab="membership">Membership &amp; subscriptions <span>@subscriptions.Count</span></a>
+            <a class="@(tab == "bookings" ? "is-active" : null)" asp-action="Index" asp-route-tab="bookings">All bookings <span>@bookings.Count</span></a>
+            <a class="@(tab == "invoices" ? "is-active" : null)" asp-action="Index" asp-route-tab="invoices">Invoices &amp; refunds <span>@(invoices.Count + refunds.Count)</span></a>
+            <a class="@(tab == "audit" ? "is-active" : null)" asp-action="Index" asp-route-tab="audit">System audit trail</a>
+            <a asp-controller="Reports" asp-action="Index">Reports &amp; analytics</a>
+        </nav>
+
+        @if (tab == "facilities")
+        {
+            <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-3">
+                <div>
+                    <h2 class="h4 mb-1">Facility &amp; equipment registry</h2>
+                    <p class="muted mb-0">Manage rates, hours, booking mode and linked inventory.</p>
+                </div>
+                <a class="btn btn-primary" asp-action="EditFacility">+ Add facility</a>
+            </div>
+
+            <div class="admin-facility-list">
+                @foreach (var facility in facilities)
+                {
+                    var isApproval = facility.BookingMode == BookingMode.ApprovalRequired;
+                    <article class="admin-facility-card">
+                        <div class="admin-facility-card__main">
+                            <img src="@(facility.ImageUrl ?? "/images/facility-ballroom.jpg")" alt="@facility.Name" />
+                            <div class="admin-facility-card__info">
+                                <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                                    <h3 class="h5 mb-0">@facility.Name</h3>
+                                    <span class="badge-soft">@facility.Category</span>
+                                    <span class="@(facility.Status == FacilityStatus.Available ? "badge-soft" : "badge-warn")">@facility.Status</span>
                                 </div>
-                                @if (refund.Status == RefundStatus.Pending || refund.Status == RefundStatus.Approved)
+                                <div class="admin-facility-card__meta">
+                                    <span>Capacity @facility.Capacity</span>
+                                    <span>@facility.OpenTime.ToString(@"hh\:mm") – @facility.CloseTime.ToString(@"hh\:mm")</span>
+                                    <span>Mode: @(isApproval ? "Staff approval" : "Instant confirmation")</span>
+                                    <span class="admin-facility-card__rate">Base rate: MYR @facility.HourlyRate.ToString("N2") / hour</span>
+                                </div>
+                            </div>
+                            <div class="admin-facility-card__actions">
+                                @if (facility.Status != FacilityStatus.Maintenance)
                                 {
-                                    <div class="d-flex gap-1">
-                                        <form asp-action="ProcessRefund" method="post">
-                                            @Html.AntiForgeryToken()
-                                            <input type="hidden" name="id" value="@refund.Id" />
-                                            <input type="hidden" name="approve" value="true" />
-                                            <button class="btn btn-sm btn-primary" type="submit">Approve</button>
-                                        </form>
-                                        <form asp-action="ProcessRefund" method="post">
-                                            @Html.AntiForgeryToken()
-                                            <input type="hidden" name="id" value="@refund.Id" />
-                                            <input type="hidden" name="approve" value="false" />
-                                            <button class="btn btn-sm btn-ghost" type="submit">Reject</button>
-                                        </form>
-                                    </div>
+                                    <form asp-action="SetFacilityStatus" method="post">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@facility.Id" />
+                                        <input type="hidden" name="status" value="@FacilityStatus.Maintenance" />
+                                        <button class="btn btn-sm btn-ghost admin-danger" type="submit">Set maintenance</button>
+                                    </form>
                                 }
+                                else
+                                {
+                                    <form asp-action="SetFacilityStatus" method="post">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@facility.Id" />
+                                        <input type="hidden" name="status" value="@FacilityStatus.Available" />
+                                        <button class="btn btn-sm btn-ghost" type="submit">Mark available</button>
+                                    </form>
+                                }
+                                <a class="btn btn-sm btn-ghost" asp-action="EditFacility" asp-route-id="@facility.Id">Edit facility</a>
+                                <a class="btn btn-sm btn-primary" asp-action="EditFacility" asp-route-id="@facility.Id">+ Add equipment</a>
+                            </div>
+                        </div>
+
+                        <div class="admin-facility-card__inventory">
+                            <div class="small text-uppercase fw-semibold muted mb-2">Linked rentable equipment &amp; inventory</div>
+                            @if (!facility.InventoryItems.Any())
+                            {
+                                <p class="muted small mb-0">No inventory items yet.</p>
+                            }
+                            else
+                            {
+                                <div class="admin-inventory-grid">
+                                    @foreach (var item in facility.InventoryItems)
+                                    {
+                                        <div class="admin-inventory-item">
+                                            <strong>@item.Name</strong>
+                                            <div class="small muted">Stock @item.Quantity · @item.Condition</div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+        else if (tab == "membership")
+        {
+            <div class="row g-4">
+                <div class="col-lg-4">
+                    <div class="panel">
+                        <h3 class="h5">Membership plans</h3>
+                        @foreach (var plan in plans)
+                        {
+                            <div class="py-2 border-bottom">
+                                <strong>@plan.Name</strong>
+                                <div class="small muted">MYR @plan.AnnualFee.ToString("N2") / year · @plan.DiscountPercent% discount</div>
                             </div>
                         }
-                    }
+                    </div>
                 </div>
-            </div>
-
-            <div class="col-lg-5">
-                <div class="panel mb-3">
-                    <h3 class="h5">Members</h3>
-                    @foreach (var member in members)
-                    {
-                        <div class="d-flex justify-content-between py-1">
-                            <span>@member.FullName</span>
-                            <span class="badge-soft">@member.MembershipStatus</span>
+                <div class="col-lg-8">
+                    <div class="panel">
+                        <h3 class="h5">Members &amp; subscriptions</h3>
+                        <div class="table-responsive">
+                            <table class="table mb-0">
+                                <thead><tr><th>Member</th><th>Plan</th><th>Status</th><th>Ends</th><th>Auto-renew</th></tr></thead>
+                                <tbody>
+                                @foreach (var sub in subscriptions)
+                                {
+                                    <tr>
+                                        <td>@sub.User?.FullName</td>
+                                        <td>@sub.MembershipPlan?.Name</td>
+                                        <td>@sub.Status</td>
+                                        <td>@sub.EndDate.ToString("dd MMM yyyy")</td>
+                                        <td>@(sub.AutoRenew && sub.CancelledAt is null ? "On" : "Off")</td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
                         </div>
-                    }
-                </div>
-                <div class="panel">
-                    <h3 class="h5">Cancellation / refund policy</h3>
-                    @foreach (var setting in settings)
-                    {
-                        <form asp-action="UpdateSetting" method="post" class="row g-2 align-items-end mb-2">
-                            @Html.AntiForgeryToken()
-                            <input type="hidden" name="id" value="@setting.Id" />
-                            <div class="col-7">
-                                <label class="form-label small mb-1">@setting.Key</label>
-                                <input class="form-control" name="value" value="@setting.Value" />
+                        <h4 class="h6 mt-4">Registered accounts</h4>
+                        @foreach (var member in members.Take(12))
+                        {
+                            <div class="d-flex justify-content-between py-1">
+                                <span>@member.FullName <span class="muted small">@member.Email</span></span>
+                                <span class="badge-soft">@member.MembershipStatus</span>
                             </div>
-                            <div class="col-5">
-                                <button class="btn btn-ghost btn-sm w-100" type="submit">Save</button>
-                            </div>
-                        </form>
-                    }
-                    <a class="btn btn-primary btn-sm mt-2" asp-controller="Reports" asp-action="Index">Open reports</a>
+                        }
+                    </div>
                 </div>
             </div>
-        </div>
+        }
+        else if (tab == "bookings")
+        {
+            <div class="panel">
+                <h3 class="h5">All bookings &amp; overrides</h3>
+                <div class="table-responsive">
+                    <table class="table mb-0">
+                        <thead><tr><th>Facility</th><th>Member</th><th>When</th><th>Status</th><th>Amount</th></tr></thead>
+                        <tbody>
+                        @foreach (var booking in bookings)
+                        {
+                            <tr>
+                                <td>@booking.Facility?.Name</td>
+                                <td>@booking.Member?.FullName</td>
+                                <td>@booking.StartUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm")</td>
+                                <td>@booking.Status</td>
+                                <td>MYR @booking.Amount.ToString("N2")</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+        else if (tab == "invoices")
+        {
+            <div class="row g-4">
+                <div class="col-lg-7">
+                    <div class="panel">
+                        <h3 class="h5">Invoices</h3>
+                        <div class="table-responsive">
+                            <table class="table mb-0">
+                                <thead><tr><th>Invoice</th><th>Member</th><th>Amount</th><th>Status</th></tr></thead>
+                                <tbody>
+                                @foreach (var invoice in invoices)
+                                {
+                                    <tr>
+                                        <td>@invoice.InvoiceNumber</td>
+                                        <td>@invoice.User?.FullName</td>
+                                        <td>MYR @invoice.Amount.ToString("N2")</td>
+                                        <td>@invoice.Status</td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-5">
+                    <div class="panel">
+                        <h3 class="h5">Refund queue</h3>
+                        @if (!refunds.Any())
+                        {
+                            <p class="muted mb-0">No refund requests.</p>
+                        }
+                        else
+                        {
+                            @foreach (var refund in refunds)
+                            {
+                                <div class="d-flex justify-content-between align-items-center gap-2 py-2 border-bottom">
+                                    <div>
+                                        <strong>@refund.Invoice?.InvoiceNumber</strong>
+                                        <div class="small muted">MYR @refund.Amount.ToString("N2") · @refund.Status</div>
+                                    </div>
+                                    @if (refund.Status is RefundStatus.Pending or RefundStatus.Approved)
+                                    {
+                                        <div class="d-flex gap-1">
+                                            <form asp-action="ProcessRefund" method="post">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="id" value="@refund.Id" />
+                                                <input type="hidden" name="approve" value="true" />
+                                                <button class="btn btn-sm btn-primary" type="submit">Approve</button>
+                                            </form>
+                                            <form asp-action="ProcessRefund" method="post">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="id" value="@refund.Id" />
+                                                <input type="hidden" name="approve" value="false" />
+                                                <button class="btn btn-sm btn-ghost" type="submit">Reject</button>
+                                            </form>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="row g-4">
+                <div class="col-lg-5">
+                    <div class="panel">
+                        <h3 class="h5">Cancellation / refund policy</h3>
+                        @foreach (var setting in settings)
+                        {
+                            <form asp-action="UpdateSetting" method="post" class="row g-2 align-items-end mb-2">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@setting.Id" />
+                                <div class="col-7">
+                                    <label class="form-label small mb-1">@setting.Key</label>
+                                    <input class="form-control" name="value" value="@setting.Value" />
+                                </div>
+                                <div class="col-5">
+                                    <button class="btn btn-ghost btn-sm w-100" type="submit">Save</button>
+                                </div>
+                            </form>
+                        }
+                    </div>
+                </div>
+                <div class="col-lg-7">
+                    <div class="panel">
+                        <h3 class="h5">System audit trail</h3>
+                        @if (!audits.Any())
+                        {
+                            <p class="muted mb-0">No audit events yet.</p>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table mb-0">
+                                    <thead><tr><th>When</th><th>Action</th><th>Entity</th><th>Details</th></tr></thead>
+                                    <tbody>
+                                    @foreach (var log in audits)
+                                    {
+                                        <tr>
+                                            <td>@log.CreatedAt.ToLocalTime().ToString("dd MMM HH:mm")</td>
+                                            <td>@log.Action</td>
+                                            <td>@log.Entity</td>
+                                            <td class="small muted">@log.Details</td>
+                                        </tr>
+                                    }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
     </div>
 </section>
