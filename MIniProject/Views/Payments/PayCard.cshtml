@@ -11,7 +11,7 @@
             <p class="muted mb-0">Enter your card details to pay MYR @Model.Amount.ToString("N2") for @Model.InvoiceNumber.</p>
         </div>
 
-        <form asp-action="PayCard" method="post" class="panel" autocomplete="off">
+        <form asp-action="PayCard" method="post" class="panel" autocomplete="off" id="cardPaymentForm">
             @Html.AntiForgeryToken()
             <input type="hidden" asp-for="InvoiceId" />
             <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
@@ -24,9 +24,18 @@
 
             <div class="mb-3">
                 <label asp-for="CardNumber" class="form-label"></label>
-                <input asp-for="CardNumber" class="form-control" inputmode="numeric" maxlength="23" placeholder="ACCT-000035" />
+                <input asp-for="CardNumber"
+                       class="form-control"
+                       id="CardNumber"
+                       inputmode="numeric"
+                       maxlength="19"
+                       placeholder="4111 1111 1111 1111"
+                       data-card-number="true"
+                       aria-describedby="cardNumberHelp" />
                 <span asp-validation-for="CardNumber" class="text-danger"></span>
+                <div class="form-text" id="cardNumberHelp">Enter 16 digits. Spaces are added automatically after every 4 digits.</div>
                 <div class="form-text">Demo tip: use <code>4111 1111 1111 1111</code></div>
+                <div class="small mt-1" id="cardNumberStatus" aria-live="polite"></div>
             </div>
 
             <div class="row g-3">

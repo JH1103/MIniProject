@@ -55,8 +55,13 @@ public class BookingService
         var now = DateTime.UtcNow.Date;
         return await _db.Subscriptions
             .Include(s => s.MembershipPlan)
-            .Where(s => s.UserId == userId && s.Status == MembershipStatus.Active && s.StartDate <= now && s.EndDate >= now)
-            .OrderByDescending(s => s.EndDate)
+            .Where(s => s.UserId == userId &&
+                        s.Status == MembershipStatus.Active &&
+                        s.StartDate <= now &&
+                        s.EndDate >= now)
+            .OrderBy(s => s.CancelledAt == null ? 0 : 1)
+            .ThenByDescending(s => s.CreatedAt)
+            .ThenByDescending(s => s.EndDate)
             .FirstOrDefaultAsync(ct);
     }
 

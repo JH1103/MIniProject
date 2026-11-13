@@ -229,13 +229,17 @@ public class PaymentsController : Controller
     private void ValidateCardDetails(CardPaymentViewModel model)
     {
         var digits = Regex.Replace(model.CardNumber ?? string.Empty, @"\D", string.Empty);
-        if (digits.Length is < 13 or > 19)
+        if (digits.Length != 16)
         {
-            ModelState.AddModelError(nameof(model.CardNumber), "Card number must be 13 to 19 digits.");
+            ModelState.AddModelError(nameof(model.CardNumber), "Card number must be exactly 16 digits.");
+        }
+        else if (!digits.All(char.IsDigit))
+        {
+            ModelState.AddModelError(nameof(model.CardNumber), "Card number may only contain digits.");
         }
         else if (!PassesLuhn(digits))
         {
-            ModelState.AddModelError(nameof(model.CardNumber), "Card number is invalid.");
+            ModelState.AddModelError(nameof(model.CardNumber), "Card number failed validation. Please check the digits.");
         }
 
         var currentYear = DateTime.Today.Year;

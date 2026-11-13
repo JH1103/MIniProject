@@ -1,0 +1,98 @@
+@model MembershipManageViewModel
+@{
+    ViewData["Title"] = "Manage membership";
+    var sub = Model.Subscription;
+}
+
+<section class="section">
+    <div class="container" style="max-width:860px">
+        <div class="section-head">
+            <h2>Manage membership</h2>
+            <p class="muted mb-0">View your plan, change auto-renewal, or unsubscribe.</p>
+        </div>
+
+        <div class="panel mb-3">
+            @if (sub?.MembershipPlan is null)
+            {
+                <p class="muted mb-3">You do not have an active membership.</p>
+                <a class="btn btn-primary" asp-action="Plans">Browse plans</a>
+            }
+            else
+            {
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4"><strong>Plan</strong><div>@sub.MembershipPlan.Name</div></div>
+                    <div class="col-md-4"><strong>Valid until</strong><div>@sub.EndDate.ToString("dd MMM yyyy")</div></div>
+                    <div class="col-md-4">
+                        <strong>Auto-renewal</strong>
+                        <div>
+                            @if (sub.AutoRenew && sub.CancelledAt is null)
+                            {
+                                <span class="badge-soft">On</span>
+                            }
+                            else
+                            {
+                                <span class="badge-warn">Off</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                @if (sub.CancelledAt is not null)
+                {
+                    <p class="muted">Unsubscribed on @sub.CancelledAt.Value.ToLocalTime().ToString("dd MMM yyyy"). Access continues until @sub.EndDate.ToString("dd MMM yyyy").</p>
+                }
+
+                <div class="d-flex flex-wrap gap-2">
+                    @if (sub.CancelledAt is null)
+                    {
+                        <form asp-action="ToggleAutoRenew" method="post">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@sub.Id" />
+                            <input type="hidden" name="autoRenew" value="@(sub.AutoRenew ? "false" : "true")" />
+                            <button class="btn btn-ghost" type="submit">
+                                @(sub.AutoRenew ? "Turn off auto-renewal" : "Turn on auto-renewal")
+                            </button>
+                        </form>
+
+                        <form asp-action="Unsubscribe" method="post" onsubmit="return confirm('Unsubscribe from this membership? Auto-renewal will stop and access ends on the expiry date.');">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@sub.Id" />
+                            <button class="btn btn-ghost" type="submit" style="border-color:rgba(155,59,47,.35);color:var(--danger)">Unsubscribe</button>
+                        </form>
+                    }
+                    <a class="btn btn-primary" asp-action="Plans">Change plan</a>
+                </div>
+            }
+        </div>
+
+        @if (Model.History.Any())
+        {
+            <div class="panel">
+                <h3 class="h5">Subscription history</h3>
+                <div class="table-responsive">
+                    <table class="table mb-0">
+                        <thead>
+                            <tr>
+                                <th>Plan</th>
+                                <th>Period</th>
+                                <th>Status</th>
+                                <th>Auto-renew</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var item in Model.History)
+                        {
+                            <tr>
+                                <td>@item.MembershipPlan?.Name</td>
+                                <td>@item.StartDate.ToString("dd MMM yyyy") – @item.EndDate.ToString("dd MMM yyyy")</td>
+                                <td>@item.Status</td>
+                                <td>@(item.AutoRenew && item.CancelledAt is null ? "On" : "Off")</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    </div>
+</section>
