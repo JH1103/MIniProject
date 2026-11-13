@@ -229,17 +229,9 @@ public class PaymentsController : Controller
     private void ValidateCardDetails(CardPaymentViewModel model)
     {
         var digits = Regex.Replace(model.CardNumber ?? string.Empty, @"\D", string.Empty);
-        if (digits.Length != 16)
+        if (digits.Length != 16 || !digits.All(char.IsDigit))
         {
-            ModelState.AddModelError(nameof(model.CardNumber), "Card number must be exactly 16 digits.");
-        }
-        else if (!digits.All(char.IsDigit))
-        {
-            ModelState.AddModelError(nameof(model.CardNumber), "Card number may only contain digits.");
-        }
-        else if (!PassesLuhn(digits))
-        {
-            ModelState.AddModelError(nameof(model.CardNumber), "Card number failed validation. Please check the digits.");
+            ModelState.AddModelError(nameof(model.CardNumber), "Card number must be exactly 16 digits (grouped by 4).");
         }
 
         var currentYear = DateTime.Today.Year;
@@ -253,28 +245,5 @@ public class PaymentsController : Controller
         {
             ModelState.AddModelError(nameof(model.ExpiryYear), "Enter a valid expiry year.");
         }
-    }
-
-    private static bool PassesLuhn(string digits)
-    {
-        var sum = 0;
-        var alternate = false;
-        for (var i = digits.Length - 1; i >= 0; i--)
-        {
-            var n = digits[i] - '0';
-            if (alternate)
-            {
-                n *= 2;
-                if (n > 9)
-                {
-                    n -= 9;
-                }
-            }
-
-            sum += n;
-            alternate = !alternate;
-        }
-
-        return sum % 10 == 0;
     }
 }

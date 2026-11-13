@@ -22,21 +22,6 @@
       return digits.replace(/(\d{4})(?=\d)/g, '$1 ').trim();
     };
 
-    const luhnCheck = (digits) => {
-      let sum = 0;
-      let alternate = false;
-      for (let i = digits.length - 1; i >= 0; i -= 1) {
-        let n = digits.charCodeAt(i) - 48;
-        if (alternate) {
-          n *= 2;
-          if (n > 9) n -= 9;
-        }
-        sum += n;
-        alternate = !alternate;
-      }
-      return sum % 10 === 0;
-    };
-
     const updateStatus = () => {
       if (!status) return;
       const digits = cardInput.value.replace(/\D/g, '');
@@ -50,13 +35,8 @@
         status.className = 'small mt-1 muted';
         return;
       }
-      if (luhnCheck(digits)) {
-        status.textContent = '16-digit card number looks valid.';
-        status.className = 'small mt-1 text-success';
-      } else {
-        status.textContent = '16 digits entered, but the number failed validation.';
-        status.className = 'small mt-1 text-danger';
-      }
+      status.textContent = '16-digit card number ready.';
+      status.className = 'small mt-1 text-success';
     };
 
     cardInput.addEventListener('input', () => {
