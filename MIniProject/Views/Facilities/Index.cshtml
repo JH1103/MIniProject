@@ -3,6 +3,7 @@
     ViewData["Title"] = "Facilities";
     var categories = ViewBag.Categories as List<string> ?? new();
     var selected = ViewBag.SelectedCategory as string;
+    var selectedMode = ViewBag.SelectedMode as string;
 }
 
 <section class="section">
@@ -11,28 +12,88 @@
             <h2>Facilities</h2>
             <p class="muted mb-0">Browse images, prices, capacity and operating hours for every bookable space.</p>
         </div>
-        <div class="d-flex flex-wrap gap-2 mb-4">
-            <a class="btn btn-sm @(string.IsNullOrEmpty(selected) ? "btn-primary" : "btn-ghost")" asp-action="Index">All</a>
-            @foreach (var category in categories)
-            {
-                <a class="btn btn-sm @(selected == category ? "btn-primary" : "btn-ghost")" asp-action="Index" asp-route-category="@category">@category</a>
-            }
+
+        <div class="facility-filters mb-4">
+            <div class="facility-filters__categories d-flex flex-wrap gap-2">
+                <a class="btn btn-sm @(string.IsNullOrEmpty(selected) ? "btn-primary" : "btn-ghost")"
+                   asp-action="Index"
+                   asp-route-mode="@selectedMode">All</a>
+                @foreach (var category in categories)
+                {
+                    <a class="btn btn-sm @(selected == category ? "btn-primary" : "btn-ghost")"
+                       asp-action="Index"
+                       asp-route-category="@category"
+                       asp-route-mode="@selectedMode">@category</a>
+                }
+            </div>
+
+            <div class="facility-filters__mode">
+                <label class="form-label mb-0 small" for="modeFilter">Mode</label>
+                <form method="get" asp-action="Index" class="d-inline-flex align-items-center gap-2">
+                    @if (!string.IsNullOrEmpty(selected))
+                    {
+                        <input type="hidden" name="category" value="@selected" />
+                    }
+                    <select id="modeFilter" name="mode" class="form-select form-select-sm facility-mode-select" onchange="this.form.submit()">
+                        @if (string.IsNullOrEmpty(selectedMode))
+                        {
+                            <option value="" selected>All Modes</option>
+                        }
+                        else
+                        {
+                            <option value="">All Modes</option>
+                        }
+                        @if (selectedMode == "instant")
+                        {
+                            <option value="instant" selected>Instant Confirmation</option>
+                        }
+                        else
+                        {
+                            <option value="instant">Instant Confirmation</option>
+                        }
+                        @if (selectedMode == "approval")
+                        {
+                            <option value="approval" selected>Approval Required</option>
+                        }
+                        else
+                        {
+                            <option value="approval">Approval Required</option>
+                        }
+                    </select>
+                </form>
+            </div>
         </div>
-        <div class="facility-grid">
-            @foreach (var facility in Model)
-            {
-                <a class="facility-tile" asp-action="Details" asp-route-id="@facility.Id">
-                    <img src="@(facility.ImageUrl ?? "/images/facility-ballroom.jpg")" alt="@facility.Name" />
-                    <div class="facility-tile__body">
-                        <h3 class="h5 mb-1">@facility.Name</h3>
-                        <p class="muted small mb-2">@facility.Description</p>
-                        <div class="facility-tile__meta">
-                            <span>@facility.OpenTime.ToString(@"hh\:mm") – @facility.CloseTime.ToString(@"hh\:mm")</span>
-                            <span>@(facility.HourlyRate == 0 ? "Included" : $"MYR {facility.HourlyRate:N2}/hr")</span>
+
+        @if (!Model.Any())
+        {
+            <div class="panel">
+                <p class="muted mb-0">No facilities match this filter. Try another category or booking mode.</p>
+            </div>
+        }
+        else
+        {
+            <div class="facility-grid">
+                @foreach (var facility in Model)
+                {
+                    var isApproval = facility.BookingMode == BookingMode.ApprovalRequired;
+                    <a class="facility-tile" asp-action="Details" asp-route-id="@facility.Id">
+                        <div class="facility-tile__media">
+                            <img src="@(facility.ImageUrl ?? "/images/facility-ballroom.jpg")" alt="@facility.Name" />
+                            <span class="facility-tile__mode @(isApproval ? "is-approval" : "is-instant")">
+                                @(isApproval ? "Approval required" : "Instant")
+                            </span>
                         </div>
-                    </div>
-                </a>
-            }
-        </div>
+                        <div class="facility-tile__body">
+                            <h3 class="h5 mb-1">@facility.Name</h3>
+                            <p class="muted small mb-2">@facility.Description</p>
+                            <div class="facility-tile__meta">
+                                <span>@facility.OpenTime.ToString(@"hh\:mm") – @facility.CloseTime.ToString(@"hh\:mm")</span>
+                                <span>@(facility.HourlyRate == 0 ? "Included" : $"MYR {facility.HourlyRate:N2}/hr")</span>
+                            </div>
+                        </div>
+                    </a>
+                }
+            </div>
+        }
     </div>
 </section>
