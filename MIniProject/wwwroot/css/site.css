@@ -353,6 +353,9 @@ a:hover { color: var(--lagoon); }
   gap: 0.6rem;
   align-items: center;
 }
+.chart-bar--wide {
+  grid-template-columns: minmax(110px, 1.4fr) 1.4fr minmax(110px, 1fr);
+}
 .chart-bar__track {
   height: 10px;
   border-radius: 999px;
@@ -436,6 +439,176 @@ a:hover { color: var(--lagoon); }
 }
 .ewallet-steps li { margin-bottom: 0.35rem; }
 
+.admin-hero,
+.reports-hero {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1.6rem 1.7rem;
+  border-radius: 24px;
+  background:
+    linear-gradient(135deg, rgba(18, 53, 40, 0.96), rgba(31, 77, 58, 0.92)),
+    radial-gradient(circle at top right, rgba(196, 163, 90, 0.28), transparent 42%);
+  color: #f7fbf8;
+  box-shadow: var(--shadow);
+  margin-bottom: 1.25rem;
+}
+.admin-hero__eyebrow {
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.78;
+  margin-bottom: 0.55rem;
+}
+.admin-hero h1,
+.reports-hero h2 {
+  font-family: var(--font-display);
+  font-size: clamp(1.7rem, 3vw, 2.4rem);
+  margin: 0.45rem 0 0.55rem;
+}
+.admin-hero p,
+.reports-hero p { opacity: 0.88; max-width: 38rem; }
+.admin-hero__stats {
+  display: grid;
+  gap: 0.7rem;
+  min-width: min(100%, 220px);
+}
+.admin-hero__stats > div {
+  padding: 0.85rem 1rem;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.admin-hero__stats span {
+  display: block;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+.admin-hero__stats strong {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 1.05rem;
+}
+
+.admin-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-bottom: 1.5rem;
+  padding: 0.45rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--card-line);
+}
+.admin-tabs a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.65rem 0.9rem;
+  border-radius: 12px;
+  color: rgba(20, 35, 28, 0.78);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+.admin-tabs a span {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.4rem;
+  height: 1.4rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: rgba(31, 77, 58, 0.1);
+  font-size: 0.75rem;
+}
+.admin-tabs a.is-active,
+.admin-tabs a:hover {
+  background: var(--forest);
+  color: #fff;
+}
+.admin-tabs a.is-active span,
+.admin-tabs a:hover span {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+.admin-facility-list {
+  display: grid;
+  gap: 1rem;
+}
+.admin-facility-card {
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid var(--card-line);
+  border-radius: 22px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.admin-facility-card__main {
+  display: grid;
+  grid-template-columns: 140px 1fr auto;
+  gap: 1rem;
+  padding: 1rem;
+  align-items: start;
+}
+.admin-facility-card__main img {
+  width: 140px;
+  height: 110px;
+  object-fit: cover;
+  border-radius: 14px;
+}
+.admin-facility-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem 1rem;
+  color: rgba(20, 35, 28, 0.68);
+  font-size: 0.92rem;
+}
+.admin-facility-card__rate {
+  color: var(--forest);
+  font-weight: 700;
+}
+.admin-facility-card__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 150px;
+}
+.admin-danger {
+  border-color: rgba(155, 59, 47, 0.35) !important;
+  color: var(--danger) !important;
+}
+.admin-facility-card__inventory {
+  padding: 0.9rem 1rem 1.1rem;
+  border-top: 1px solid var(--card-line);
+  background: rgba(243, 247, 244, 0.7);
+}
+.admin-inventory-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.7rem;
+}
+.admin-inventory-item {
+  padding: 0.75rem 0.85rem;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--card-line);
+}
+
+.membership-tier-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.85rem;
+}
+.membership-tier-card {
+  padding: 1rem 1.05rem;
+  border-radius: 16px;
+  background: rgba(31, 77, 58, 0.06);
+  border: 1px solid var(--card-line);
+}
+
 @keyframes rise-in {
   from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: translateY(0); }
@@ -452,4 +625,15 @@ a:hover { color: var(--lagoon); }
   .hero__content { padding: 3.5rem 0 3rem; }
   .footer-grid { grid-template-columns: 1fr; }
   .section { padding: 3rem 0; }
+  .admin-facility-card__main {
+    grid-template-columns: 1fr;
+  }
+  .admin-facility-card__main img {
+    width: 100%;
+    height: 160px;
+  }
+  .admin-facility-card__actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
 }

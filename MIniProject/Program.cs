@@ -32,6 +32,7 @@ builder.Services.ConfigureApplicationCookie(options =>
 builder.Services.AddScoped<BookingService>();
 builder.Services.AddScoped<PaymentService>();
 builder.Services.AddScoped<ReportService>();
+builder.Services.AddScoped<ReportPdfService>();
 builder.Services.AddControllersWithViews();
 
 var app = builder.Build();

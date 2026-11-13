@@ -13,11 +13,13 @@ public class ReportsController : Controller
 {
     private readonly ApplicationDbContext _db;
     private readonly ReportService _reportService;
+    private readonly ReportPdfService _pdfService;
 
-    public ReportsController(ApplicationDbContext db, ReportService reportService)
+    public ReportsController(ApplicationDbContext db, ReportService reportService, ReportPdfService pdfService)
     {
         _db = db;
         _reportService = reportService;
+        _pdfService = pdfService;
     }
 
     public async Task<IActionResult> Index()
@@ -54,5 +56,18 @@ public class ReportsController : Controller
         }
 
         return File(Encoding.UTF8.GetBytes(sb.ToString()), "text/csv", $"bookings-{DateTime.UtcNow:yyyyMMdd}.csv");
+    }
+
+    public async Task<IActionResult> ExportPdf()
+    {
+        var stats = await _reportService.GetDashboardStatsAsync();
+        var clubName = await _db.SystemSettings
+            .Where(s => s.Key == "ClubhouseName")
+            .Select(s => s.Value)
+            .FirstOrDefaultAsync() ?? "Kota Permai Golf & Country Club";
+
+        var pdf = _pdfService.BuildMonthlyReport(stats, clubName);
+        var fileName = $"kota-permai-report-{DateTime.UtcNow:yyyyMM}.pdf";
+        return File(pdf, "application/pdf", fileName);
     }
 }

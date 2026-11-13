@@ -3,53 +3,58 @@
     ViewData["Title"] = "Reports & analytics";
     var bookings = ViewBag.RecentBookings as List<Booking> ?? new();
     var payments = ViewBag.Payments as List<PaymentTransaction> ?? new();
-    var maxUsage = Math.Max(1, Model.FacilityUsage.DefaultIfEmpty().Max(x => x?.BookingCount ?? 0));
+    var maxUsage = Math.Max(1m, Model.FacilityUsage.DefaultIfEmpty().Max(x => x?.Revenue ?? 0m));
+    var maxPeak = Math.Max(1, Model.PeakHours.DefaultIfEmpty().Max(x => x?.Count ?? 0));
 }
 
 <section class="section">
     <div class="container">
-        <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-4">
-            <div class="section-head mb-0">
-                <h2>Reports & analytics</h2>
-                <p class="muted mb-0">Booking statistics, revenue and facility usage for management decisions.</p>
+        <div class="reports-hero mb-4">
+            <div>
+                <div class="admin-hero__eyebrow">Module 6 · Reporting &amp; analytics management</div>
+                <span class="badge-soft">Real-time performance</span>
+                <h2 class="mt-2 mb-1">Operational dashboard &amp; financial analytics</h2>
+                <p class="muted mb-0">Booking statistics, facility demand and revenue for management decisions.</p>
             </div>
-            <a class="btn btn-ghost" asp-action="ExportBookings">Export bookings CSV</a>
+            <div class="d-flex flex-wrap gap-2">
+                <a class="btn btn-primary" asp-action="ExportPdf">Export PDF</a>
+                <a class="btn btn-ghost" asp-action="ExportBookings">Export CSV</a>
+            </div>
         </div>
 
         <div class="stat-row mb-4">
-            <div class="stat"><span class="muted">Bookings today</span><strong>@Model.BookingsToday</strong></div>
-            <div class="stat"><span class="muted">Active members</span><strong>@Model.ActiveMembers</strong></div>
-            <div class="stat"><span class="muted">Pending approvals</span><strong>@Model.PendingApprovals</strong></div>
-            <div class="stat"><span class="muted">Revenue this month</span><strong>MYR @Model.RevenueThisMonth.ToString("N2")</strong></div>
+            <div class="stat">
+                <span class="muted">Revenue this month</span>
+                <strong>MYR @Model.RevenueThisMonth.ToString("N2")</strong>
+                <div class="small muted">Completed payments in @DateTime.UtcNow.ToString("MMM yyyy")</div>
+            </div>
+            <div class="stat">
+                <span class="muted">Total bookings</span>
+                <strong>@Model.TotalBookings</strong>
+                <div class="small muted">@Model.BookingsToday today · @Model.PendingApprovals pending</div>
+            </div>
+            <div class="stat">
+                <span class="muted">Active members</span>
+                <strong>@Model.ActiveMembers</strong>
+                <div class="small muted">@Model.RegisteredMembers registered accounts</div>
+            </div>
+            <div class="stat">
+                <span class="muted">Cancellation ratio</span>
+                <strong>@Model.CancellationRatio.ToString("N1")%</strong>
+                <div class="small muted">Refund policy enforced in admin settings</div>
+            </div>
         </div>
 
         <div class="row g-4">
             <div class="col-lg-6">
                 <div class="panel">
-                    <h3 class="h5">Facility usage</h3>
-                    <div class="chart-bars">
-                        @foreach (var item in Model.FacilityUsage)
-                        {
-                            var width = (int)Math.Round(100.0 * item.BookingCount / maxUsage);
-                            <div class="chart-bar">
-                                <span>@item.FacilityName</span>
-                                <div class="chart-bar__track"><div class="chart-bar__fill" style="width:@width%"></div></div>
-                                <strong>@item.BookingCount</strong>
-                            </div>
-                        }
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-6">
-                <div class="panel">
-                    <h3 class="h5">Peak booking hours (UTC)</h3>
+                    <h3 class="h5">Peak facility utilisation hours</h3>
                     <div class="chart-bars">
                         @foreach (var item in Model.PeakHours)
                         {
-                            var maxPeak = Math.Max(1, Model.PeakHours.DefaultIfEmpty().Max(x => x?.Count ?? 0));
                             var width = (int)Math.Round(100.0 * item.Count / maxPeak);
                             <div class="chart-bar">
-                                <span>@item.Hour:00</span>
+                                <span>@item.Hour.ToString("00")h</span>
                                 <div class="chart-bar__track"><div class="chart-bar__fill" style="width:@width%"></div></div>
                                 <strong>@item.Count</strong>
                             </div>
@@ -57,7 +62,40 @@
                     </div>
                 </div>
             </div>
+            <div class="col-lg-6">
+                <div class="panel">
+                    <h3 class="h5">Facility demand &amp; revenue ranking</h3>
+                    <div class="chart-bars">
+                        @foreach (var item in Model.FacilityUsage)
+                        {
+                            var width = (int)Math.Round(100.0 * (double)(item.Revenue / maxUsage));
+                            <div class="chart-bar chart-bar--wide">
+                                <span>@item.FacilityName</span>
+                                <div class="chart-bar__track"><div class="chart-bar__fill" style="width:@width%"></div></div>
+                                <strong>MYR @item.Revenue.ToString("N2") <span class="muted small">(@item.BookingCount)</span></strong>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
         </div>
+
+        @if (Model.MembershipTiers.Any())
+        {
+            <div class="panel mt-4">
+                <h3 class="h5">Membership tier breakdown</h3>
+                <div class="membership-tier-grid">
+                    @foreach (var tier in Model.MembershipTiers)
+                    {
+                        <div class="membership-tier-card">
+                            <div class="small text-uppercase muted">@tier.PlanName</div>
+                            <strong class="d-block" style="font-size:1.6rem">@tier.MemberCount</strong>
+                            <div class="small muted">@tier.AdvanceBookingDays-day advance · @tier.DiscountPercent.ToString("N0")% discount</div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
 
         <div class="row g-4 mt-1">
             <div class="col-lg-7">
