@@ -16,7 +16,25 @@
             </div>
             <div class="mb-3">
                 <label asp-for="Password" class="form-label"></label>
-                <input asp-for="Password" class="form-control" autocomplete="current-password" />
+                <div class="password-field">
+                    <input asp-for="Password" class="form-control" autocomplete="current-password" />
+                    <button type="button"
+                            class="password-toggle"
+                            data-password-toggle
+                            aria-label="Show password"
+                            aria-pressed="false"
+                            title="Show password">
+                        <svg class="icon-eye" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                            <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                        </svg>
+                        <svg class="icon-eye-off" viewBox="0 0 24 24" aria-hidden="true" focusable="false" hidden>
+                            <path d="M3 3l18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                            <path d="M10.6 10.6a2.5 2.5 0 0 0 3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                            <path d="M9.9 5.2A10.4 10.4 0 0 1 12 5c6.5 0 10 7 10 7a17.4 17.4 0 0 1-4.1 4.7M6.1 6.1A17.5 17.5 0 0 0 2 12s3.5 7 10 7a10.3 10.3 0 0 0 4.1-.9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
             <div class="form-check mb-3">
                 <input asp-for="RememberMe" class="form-check-input" />

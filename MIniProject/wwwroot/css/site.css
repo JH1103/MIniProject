@@ -257,6 +257,40 @@ a:hover { color: var(--lagoon); }
 }
 .form-label { font-weight: 600; }
 
+.password-field {
+  position: relative;
+}
+.password-field .form-control {
+  padding-right: 2.85rem;
+}
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.45rem;
+  transform: translateY(-50%);
+  display: inline-grid;
+  place-items: center;
+  width: 2.15rem;
+  height: 2.15rem;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: rgba(20, 35, 28, 0.55);
+  cursor: pointer;
+}
+.password-toggle:hover,
+.password-toggle:focus-visible {
+  color: var(--forest);
+  background: rgba(31, 77, 58, 0.08);
+  outline: none;
+}
+.password-toggle svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  display: block;
+}
+
 .site-footer {
   margin-top: 4rem;
   padding: 2.5rem 0;
