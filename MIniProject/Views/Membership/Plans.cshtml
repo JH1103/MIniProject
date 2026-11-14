@@ -2,6 +2,11 @@
 @{
     ViewData["Title"] = "Membership plans";
     var plans = Model.OrderBy(p => p.AnnualFee).ToList();
+    var changeMode = ViewBag.ChangeMode as bool? == true;
+    var currentSub = ViewBag.CurrentSubscription as Subscription;
+    var currentPlanId = currentSub?.MembershipPlanId;
+    var currentPlanName = currentSub?.MembershipPlan?.Name;
+
     string TierClass(int index) => index switch
     {
         1 => "is-mid",
@@ -22,16 +27,41 @@
 <section class="section">
     <div class="container">
         <div class="section-head">
-            <h2>Membership plans</h2>
-            <p class="muted mb-0">Choose a tier for advance booking limits, guest allowances and facility discounts.</p>
+            @if (changeMode)
+            {
+                <h2>Change membership plan</h2>
+                <p class="muted mb-0">
+                    @if (!string.IsNullOrEmpty(currentPlanName))
+                    {
+                        <text>Your current plan is <strong>@currentPlanName</strong>. Compare options below and switch when you are ready.</text>
+                    }
+                    else
+                    {
+                        <text>Choose a new membership tier below.</text>
+                    }
+                </p>
+                <a class="small" asp-action="Manage">← Back to manage membership</a>
+            }
+            else
+            {
+                <h2>Membership plans</h2>
+                <p class="muted mb-0">Choose a tier for advance booking limits, guest allowances and facility discounts.</p>
+            }
         </div>
 
         <div class="row g-4 mb-5">
             @foreach (var plan in plans)
             {
+                var isCurrent = currentPlanId == plan.Id;
                 <div class="col-md-4">
-                    <div class="panel h-100">
-                        <h3 class="h4">@plan.Name</h3>
+                    <div class="panel h-100 @(isCurrent ? "plan-card--current" : null)">
+                        <div class="d-flex justify-content-between align-items-start gap-2 mb-1">
+                            <h3 class="h4 mb-0">@plan.Name</h3>
+                            @if (isCurrent)
+                            {
+                                <span class="badge-soft">Current plan</span>
+                            }
+                        </div>
                         <p class="display mb-2" style="font-size:2rem">MYR @plan.AnnualFee.ToString("N2")</p>
                         <p class="muted">@plan.Description</p>
                         <ul class="mb-4">
@@ -39,9 +69,17 @@
                             <li>Up to @plan.MaxGuestsPerBooking guests per booking</li>
                             <li>@plan.DiscountPercent% facility discount</li>
                         </ul>
-                        @if (User.Identity?.IsAuthenticated == true)
+                        @if (isCurrent)
                         {
-                            <a class="btn btn-primary" asp-action="Subscribe" asp-route-planId="@plan.Id">Subscribe</a>
+                            <button class="btn btn-current-plan" type="button" disabled>Current plan</button>
+                        }
+                        else if (User.Identity?.IsAuthenticated == true)
+                        {
+                            <a class="btn btn-primary" asp-action="Subscribe" asp-route-planId="@plan.Id">
+                                @(changeMode || currentPlanId is not null
+                                    ? (plan.AnnualFee > (currentSub?.MembershipPlan?.AnnualFee ?? 0) ? "Upgrade to this plan" : "Switch to this plan")
+                                    : "Subscribe")
+                            </a>
                         }
                         else
                         {
@@ -69,7 +107,13 @@
                                 <th scope="col">Privilege / feature</th>
                                 @for (var i = 0; i < plans.Count; i++)
                                 {
-                                    <th scope="col" class="@TierClass(i)">@plans[i].Name</th>
+                                    <th scope="col" class="@TierClass(i)">
+                                        @plans[i].Name
+                                        @if (currentPlanId == plans[i].Id)
+                                        {
+                                            <span class="badge-soft ms-1">Current</span>
+                                        }
+                                    </th>
                                 }
                             </tr>
                         </thead>

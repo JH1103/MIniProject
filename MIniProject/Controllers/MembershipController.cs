@@ -22,9 +22,20 @@ public class MembershipController : Controller
         _bookingService = bookingService;
     }
 
-    public async Task<IActionResult> Plans()
+    public async Task<IActionResult> Plans(bool change = false)
     {
         var plans = await _db.MembershipPlans.Where(p => p.IsActive).OrderBy(p => p.AnnualFee).ToListAsync();
+        ViewBag.ChangeMode = change;
+
+        if (User.Identity?.IsAuthenticated == true)
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user is not null)
+            {
+                ViewBag.CurrentSubscription = await _bookingService.GetActiveSubscriptionAsync(user.Id);
+            }
+        }
+
         return View(plans);
     }
 
