@@ -492,77 +492,56 @@ public static class DbSeeder
     }
 
     /// <summary>
-    /// EnsureCreated does not add new columns to an existing SQLite database.
+    /// EnsureCreated does not add new columns to an existing SQL Server database.
     /// Keep Subscription.AutoRenew / CancelledAt available for upgraded installs.
     /// </summary>
     private static async Task EnsureSubscriptionSchemaAsync(ApplicationDbContext db)
     {
-        if (!db.Database.IsSqlite())
+        if (!db.Database.IsSqlServer())
         {
             return;
         }
 
-        await db.Database.OpenConnectionAsync();
-        try
-        {
-            var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            await using (var cmd = db.Database.GetDbConnection().CreateCommand())
-            {
-                cmd.CommandText = "PRAGMA table_info('Subscriptions');";
-                await using var reader = await cmd.ExecuteReaderAsync();
-                while (await reader.ReadAsync())
-                {
-                    columns.Add(reader.GetString(1));
-                }
-            }
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            IF COL_LENGTH('Subscriptions', 'AutoRenew') IS NULL
+                ALTER TABLE [Subscriptions] ADD [AutoRenew] bit NOT NULL CONSTRAINT DF_Subscriptions_AutoRenew DEFAULT(0);
+            """);
 
-            if (columns.Count == 0)
-            {
-                return;
-            }
-
-            if (!columns.Contains("AutoRenew"))
-            {
-                await db.Database.ExecuteSqlRawAsync(
-                    "ALTER TABLE \"Subscriptions\" ADD COLUMN \"AutoRenew\" INTEGER NOT NULL DEFAULT 0;");
-            }
-
-            if (!columns.Contains("CancelledAt"))
-            {
-                await db.Database.ExecuteSqlRawAsync(
-                    "ALTER TABLE \"Subscriptions\" ADD COLUMN \"CancelledAt\" TEXT NULL;");
-            }
-        }
-        finally
-        {
-            await db.Database.CloseConnectionAsync();
-        }
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            IF COL_LENGTH('Subscriptions', 'CancelledAt') IS NULL
+                ALTER TABLE [Subscriptions] ADD [CancelledAt] datetime2 NULL;
+            """);
     }
 
     private static async Task EnsureMemberCheckInTableAsync(ApplicationDbContext db)
     {
-        if (!db.Database.IsSqlite())
+        if (!db.Database.IsSqlServer())
         {
             return;
         }
 
         await db.Database.ExecuteSqlRawAsync(
             """
-            CREATE TABLE IF NOT EXISTS "MemberCheckIns" (
-                "Id" INTEGER NOT NULL CONSTRAINT "PK_MemberCheckIns" PRIMARY KEY AUTOINCREMENT,
-                "MemberId" TEXT NOT NULL,
-                "CheckedInAt" TEXT NOT NULL,
-                "CheckedOutAt" TEXT NULL,
-                "CheckedInByUserId" TEXT NULL,
-                "CheckedOutByUserId" TEXT NULL,
-                CONSTRAINT "FK_MemberCheckIns_AspNetUsers_MemberId" FOREIGN KEY ("MemberId") REFERENCES "AspNetUsers" ("Id") ON DELETE CASCADE
-            );
-            """);
-
-        await db.Database.ExecuteSqlRawAsync(
-            """
-            CREATE INDEX IF NOT EXISTS "IX_MemberCheckIns_MemberId_CheckedOutAt"
-            ON "MemberCheckIns" ("MemberId", "CheckedOutAt");
+            IF OBJECT_ID(N'[MemberCheckIns]', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [MemberCheckIns] (
+                    [Id] int NOT NULL IDENTITY,
+                    [MemberId] nvarchar(450) NOT NULL,
+                    [CheckedInAt] datetime2 NOT NULL,
+                    [CheckedOutAt] datetime2 NULL,
+                    [CheckedInByUserId] nvarchar(max) NULL,
+                    [CheckedOutByUserId] nvarchar(max) NULL,
+                    CONSTRAINT [PK_MemberCheckIns] PRIMARY KEY ([Id]),
+                    CONSTRAINT [FK_MemberCheckIns_AspNetUsers_MemberId]
+                        FOREIGN KEY ([MemberId]) REFERENCES [AspNetUsers] ([Id]) ON DELETE CASCADE
+                );
+                CREATE INDEX [IX_MemberCheckIns_MemberId_CheckedOutAt]
+                    ON [MemberCheckIns] ([MemberId], [CheckedOutAt]);
+            END
             """);
     }
 }
+
+
