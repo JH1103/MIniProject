@@ -47,4 +47,7 @@ public class MemberDashboardViewModel
     public List<Booking> UpcomingBookings { get; set; } = [];
     public List<Invoice> Invoices { get; set; } = [];
     public List<VisitorPass> Passes { get; set; } = [];
+    public string MemberPassCode { get; set; } = string.Empty;
+    public string MemberQrBase64 { get; set; } = string.Empty;
+    public List<MembershipPlan> UpgradePlans { get; set; } = [];
 }

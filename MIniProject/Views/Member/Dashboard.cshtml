@@ -1,6 +1,7 @@
 @model MemberDashboardViewModel
 @{
     ViewData["Title"] = "Member dashboard";
+    var plan = Model.Subscription?.MembershipPlan;
 }
 
 <section class="section">
@@ -9,9 +10,9 @@
             <h2>Welcome, @Model.User.FullName</h2>
             <p class="muted mb-0">
                 Membership:
-                @if (Model.Subscription?.MembershipPlan is not null)
+                @if (plan is not null)
                 {
-                    <span class="badge-soft">@Model.Subscription.MembershipPlan.Name · active until @Model.Subscription.EndDate.ToString("dd MMM yyyy")</span>
+                    <span class="badge-soft">@plan.Name · active until @Model.Subscription!.EndDate.ToString("dd MMM yyyy")</span>
                     <span class="badge-soft ms-1">Auto-renew @(Model.Subscription.AutoRenew && Model.Subscription.CancelledAt is null ? "on" : "off")</span>
                     <a class="ms-2" asp-controller="Membership" asp-action="Manage">Manage / unsubscribe</a>
                 }
@@ -22,6 +23,84 @@
                 }
             </p>
         </div>
+
+        @if (plan is not null)
+        {
+            <div class="digital-card-section mb-4">
+                <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+                    <div>
+                        <h3 class="h5 mb-1">Digital membership card</h3>
+                        <p class="muted mb-0">Tap the card to flip and show your personal QR for staff check-in.</p>
+                    </div>
+                    <span class="badge-soft">Pass @Model.MemberPassCode</span>
+                </div>
+
+                <div class="digital-card" data-flip-card tabindex="0" role="button" aria-label="Flip membership card to show QR code">
+                    <div class="digital-card__inner">
+                        <div class="digital-card__face digital-card__face--front">
+                            <div class="digital-card__brand">Kota Permai Golf &amp; Country Club</div>
+                            <div class="digital-card__plan">@plan.Name</div>
+                            <div class="digital-card__name">@Model.User.FullName</div>
+                            <div class="digital-card__meta">
+                                <span>Member ID · @Model.User.Id[..8].ToUpperInvariant()</span>
+                                <span>Valid to @Model.Subscription!.EndDate.ToString("dd MMM yyyy")</span>
+                            </div>
+                            <div class="digital-card__hint">Tap to flip for QR</div>
+                        </div>
+                        <div class="digital-card__face digital-card__face--back">
+                            <div class="digital-card__brand">Scan at front desk</div>
+                            <img class="digital-card__qr" src="data:image/png;base64,@Model.MemberQrBase64" alt="Member QR code for @Model.User.FullName" />
+                            <div class="digital-card__code">@Model.MemberPassCode</div>
+                            <div class="digital-card__hint">Tap to flip back</div>
+                        </div>
+                    </div>
+                </div>
+
+                @if (Model.UpgradePlans.Any())
+                {
+                    <div class="upgrade-plans mt-4">
+                        <h3 class="h5 mb-1">Explore other membership plans</h3>
+                        <p class="muted mb-3">Considering an upgrade? Compare plans below and switch anytime.</p>
+                        <div class="upgrade-plans__grid">
+                            @foreach (var upgrade in Model.UpgradePlans)
+                            {
+                                <div class="upgrade-plan-card">
+                                    <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                                        <strong>@upgrade.Name</strong>
+                                        @if (upgrade.AnnualFee > plan.AnnualFee)
+                                        {
+                                            <span class="badge-soft">Upgrade</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge-warn">Alternative</span>
+                                        }
+                                    </div>
+                                    <div class="upgrade-plan-card__price">MYR @upgrade.AnnualFee.ToString("N2")<span>/year</span></div>
+                                    <p class="small muted mb-3">@upgrade.Description</p>
+                                    <ul class="small mb-3">
+                                        <li>Book @upgrade.AdvanceBookingDays days ahead</li>
+                                        <li>Up to @upgrade.MaxGuestsPerBooking guests</li>
+                                        <li>@upgrade.DiscountPercent% facility discount</li>
+                                    </ul>
+                                    <a class="btn btn-sm btn-primary" asp-controller="Membership" asp-action="Subscribe" asp-route-planId="@upgrade.Id">
+                                        @(upgrade.AnnualFee > plan.AnnualFee ? "Upgrade to this plan" : "View this plan")
+                                    </a>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="panel mb-4">
+                <h3 class="h5">Get your digital membership card</h3>
+                <p class="muted">Purchase a membership plan to unlock your flippable digital card and personal QR for clubhouse check-in.</p>
+                <a class="btn btn-primary" asp-controller="Membership" asp-action="Plans">Browse membership plans</a>
+            </div>
+        }
 
         <div class="row g-4">
             <div class="col-lg-7">

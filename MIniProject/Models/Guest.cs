@@ -62,3 +62,19 @@ public class CheckInRecord
     public string? CheckedInByUserId { get; set; }
     public string? CheckedOutByUserId { get; set; }
 }
+
+/// <summary>Front-desk check-in for members using their digital membership QR.</summary>
+public class MemberCheckIn
+{
+    public int Id { get; set; }
+
+    [Required]
+    public string MemberId { get; set; } = string.Empty;
+    public ApplicationUser? Member { get; set; }
+
+    public DateTime CheckedInAt { get; set; }
+    public DateTime? CheckedOutAt { get; set; }
+
+    public string? CheckedInByUserId { get; set; }
+    public string? CheckedOutByUserId { get; set; }
+}
