@@ -1,6 +1,22 @@
 @model List<MembershipPlan>
 @{
     ViewData["Title"] = "Membership plans";
+    var plans = Model.OrderBy(p => p.AnnualFee).ToList();
+    string TierClass(int index) => index switch
+    {
+        1 => "is-mid",
+        2 => "is-top",
+        _ => "is-base"
+    };
+    string PriorityLabel(MembershipPlan plan) => plan.DiscountPercent switch
+    {
+        >= 20 => "Guaranteed fast-track",
+        >= 10 => "Standard priority",
+        _ => "—"
+    };
+    string DiscountLabel(MembershipPlan plan) => plan.DiscountPercent <= 0
+        ? "Standard rate"
+        : $"{plan.DiscountPercent:N0}% off";
 }
 
 <section class="section">
@@ -9,8 +25,9 @@
             <h2>Membership plans</h2>
             <p class="muted mb-0">Choose a tier for advance booking limits, guest allowances and facility discounts.</p>
         </div>
-        <div class="row g-4">
-            @foreach (var plan in Model)
+
+        <div class="row g-4 mb-5">
+            @foreach (var plan in plans)
             {
                 <div class="col-md-4">
                     <div class="panel h-100">
@@ -34,5 +51,82 @@
                 </div>
             }
         </div>
+
+        @if (plans.Count >= 2)
+        {
+            <div class="plan-compare panel">
+                <div class="plan-compare__head">
+                    <div>
+                        <h3 class="h4 mb-1">Membership privileges comparison</h3>
+                        <p class="muted mb-0">Side-by-side features so you can pick the plan that fits your household.</p>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="plan-compare__table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Privilege / feature</th>
+                                @for (var i = 0; i < plans.Count; i++)
+                                {
+                                    <th scope="col" class="@TierClass(i)">@plans[i].Name</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <th scope="row">Annual fee</th>
+                                @for (var i = 0; i < plans.Count; i++)
+                                {
+                                    <td class="@TierClass(i)">MYR @plans[i].AnnualFee.ToString("N0")</td>
+                                }
+                            </tr>
+                            <tr>
+                                <th scope="row">Advance booking window</th>
+                                @for (var i = 0; i < plans.Count; i++)
+                                {
+                                    <td class="@TierClass(i)">@plans[i].AdvanceBookingDays days</td>
+                                }
+                            </tr>
+                            <tr>
+                                <th scope="row">Facility rental discount</th>
+                                @for (var i = 0; i < plans.Count; i++)
+                                {
+                                    <td class="@TierClass(i)">@DiscountLabel(plans[i])</td>
+                                }
+                            </tr>
+                            <tr>
+                                <th scope="row">Guests per booking</th>
+                                @for (var i = 0; i < plans.Count; i++)
+                                {
+                                    <td class="@TierClass(i)">@plans[i].MaxGuestsPerBooking guests</td>
+                                }
+                            </tr>
+                            <tr>
+                                <th scope="row">Priority function hall approval</th>
+                                @for (var i = 0; i < plans.Count; i++)
+                                {
+                                    <td class="@TierClass(i)">@PriorityLabel(plans[i])</td>
+                                }
+                            </tr>
+                            <tr>
+                                <th scope="row">15-minute payment hold lock</th>
+                                @for (var i = 0; i < plans.Count; i++)
+                                {
+                                    <td class="@TierClass(i) is-included">Included</td>
+                                }
+                            </tr>
+                            <tr>
+                                <th scope="row">Digital membership QR card</th>
+                                @for (var i = 0; i < plans.Count; i++)
+                                {
+                                    <td class="@TierClass(i) is-included">Included</td>
+                                }
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
     </div>
 </section>
