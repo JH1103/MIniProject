@@ -18,6 +18,7 @@ public static class DbSeeder
 
         await db.Database.EnsureCreatedAsync();
         await EnsureSubscriptionSchemaAsync(db);
+        await EnsureMemberCheckInTableAsync(db);
 
         foreach (var role in AppRoles.All)
         {
@@ -536,5 +537,32 @@ public static class DbSeeder
         {
             await db.Database.CloseConnectionAsync();
         }
+    }
+
+    private static async Task EnsureMemberCheckInTableAsync(ApplicationDbContext db)
+    {
+        if (!db.Database.IsSqlite())
+        {
+            return;
+        }
+
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            CREATE TABLE IF NOT EXISTS "MemberCheckIns" (
+                "Id" INTEGER NOT NULL CONSTRAINT "PK_MemberCheckIns" PRIMARY KEY AUTOINCREMENT,
+                "MemberId" TEXT NOT NULL,
+                "CheckedInAt" TEXT NOT NULL,
+                "CheckedOutAt" TEXT NULL,
+                "CheckedInByUserId" TEXT NULL,
+                "CheckedOutByUserId" TEXT NULL,
+                CONSTRAINT "FK_MemberCheckIns_AspNetUsers_MemberId" FOREIGN KEY ("MemberId") REFERENCES "AspNetUsers" ("Id") ON DELETE CASCADE
+            );
+            """);
+
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            CREATE INDEX IF NOT EXISTS "IX_MemberCheckIns_MemberId_CheckedOutAt"
+            ON "MemberCheckIns" ("MemberId", "CheckedOutAt");
+            """);
     }
 }

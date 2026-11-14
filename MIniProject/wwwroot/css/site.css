@@ -609,6 +609,139 @@ a:hover { color: var(--lagoon); }
   border: 1px solid var(--card-line);
 }
 
+.scanner-frame {
+  border-radius: 22px;
+  background: linear-gradient(160deg, rgba(18, 53, 40, 0.96), rgba(31, 77, 58, 0.9));
+  color: #f7fbf8;
+  padding: 1.4rem;
+}
+.scanner-frame__inner {
+  min-height: 220px;
+  border: 2px dashed rgba(255, 255, 255, 0.35);
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  gap: 0.85rem;
+  padding: 1.2rem;
+}
+.scanner-frame__inner p {
+  margin: 0;
+  max-width: 18rem;
+  opacity: 0.88;
+  font-size: 0.92rem;
+}
+
+.digital-card {
+  width: min(100%, 420px);
+  aspect-ratio: 1.68 / 1;
+  perspective: 1200px;
+  cursor: pointer;
+  outline: none;
+}
+.digital-card__inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.7s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.digital-card.is-flipped .digital-card__inner {
+  transform: rotateY(180deg);
+}
+.digital-card__face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  border-radius: 22px;
+  padding: 1.35rem 1.4rem;
+  box-shadow: var(--shadow);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  flex-direction: column;
+}
+.digital-card__face--front {
+  background:
+    linear-gradient(145deg, rgba(18, 53, 40, 0.98), rgba(47, 122, 109, 0.88)),
+    radial-gradient(circle at top right, rgba(196, 163, 90, 0.35), transparent 40%);
+  color: #f7fbf8;
+}
+.digital-card__face--back {
+  background: linear-gradient(160deg, #f7fbf8, #e7efe8);
+  color: var(--ink);
+  transform: rotateY(180deg);
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 0.55rem;
+}
+.digital-card__brand {
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+.digital-card__plan {
+  margin-top: 1.1rem;
+  font-family: var(--font-display);
+  font-size: 1.55rem;
+}
+.digital-card__name {
+  margin-top: auto;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+.digital-card__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.45rem;
+  font-size: 0.82rem;
+  opacity: 0.85;
+}
+.digital-card__hint {
+  margin-top: 0.85rem;
+  font-size: 0.78rem;
+  opacity: 0.7;
+}
+.digital-card__qr {
+  width: 148px;
+  height: 148px;
+  border-radius: 12px;
+  background: #fff;
+  padding: 0.4rem;
+  border: 1px solid var(--card-line);
+}
+.digital-card__code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  word-break: break-all;
+}
+
+.upgrade-plans__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.9rem;
+}
+.upgrade-plan-card {
+  padding: 1.1rem 1.15rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid var(--card-line);
+  box-shadow: var(--shadow);
+}
+.upgrade-plan-card__price {
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  margin-bottom: 0.45rem;
+  color: var(--forest);
+}
+.upgrade-plan-card__price span {
+  font-size: 0.85rem;
+  color: rgba(20, 35, 28, 0.6);
+  font-family: var(--font-body);
+}
+
 @keyframes rise-in {
   from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: translateY(0); }

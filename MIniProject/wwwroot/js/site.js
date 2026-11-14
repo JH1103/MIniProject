@@ -13,6 +13,17 @@
     tile.style.animationDelay = `${index * 70}ms`;
   });
 
+  document.querySelectorAll('[data-flip-card]').forEach((card) => {
+    const toggle = () => card.classList.toggle('is-flipped');
+    card.addEventListener('click', toggle);
+    card.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        toggle();
+      }
+    });
+  });
+
   document.querySelectorAll('[data-password-toggle]').forEach((button) => {
     button.addEventListener('click', () => {
       const field = button.closest('.password-field');

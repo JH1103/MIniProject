@@ -21,6 +21,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Guest> Guests => Set<Guest>();
     public DbSet<VisitorPass> VisitorPasses => Set<VisitorPass>();
     public DbSet<CheckInRecord> CheckInRecords => Set<CheckInRecord>();
+    public DbSet<MemberCheckIn> MemberCheckIns => Set<MemberCheckIn>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
     public DbSet<RefundRequest> RefundRequests => Set<RefundRequest>();
@@ -60,6 +61,15 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<VisitorPass>()
             .HasIndex(p => p.PassCode)
             .IsUnique();
+
+        builder.Entity<MemberCheckIn>()
+            .HasOne(c => c.Member)
+            .WithMany()
+            .HasForeignKey(c => c.MemberId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<MemberCheckIn>()
+            .HasIndex(c => new { c.MemberId, c.CheckedOutAt });
 
         builder.Entity<SystemSetting>()
             .HasIndex(s => s.Key)

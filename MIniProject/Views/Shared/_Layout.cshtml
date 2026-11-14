@@ -40,7 +40,7 @@
                             @if (User.IsInRole(AppRoles.Staff) || User.IsInRole(AppRoles.Administrator))
                             {
                                 <li class="nav-item"><a class="nav-link" asp-controller="Staff" asp-action="Index">Staff</a></li>
-                                <li class="nav-item"><a class="nav-link" asp-controller="Staff" asp-action="CheckIn">Check-in</a></li>
+                                <li class="nav-item"><a class="nav-link" asp-controller="Staff" asp-action="CheckIn">Staff operations &amp; check-in</a></li>
                             }
                             @if (User.IsInRole(AppRoles.Administrator))
                             {
