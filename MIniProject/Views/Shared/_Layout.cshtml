@@ -27,14 +27,20 @@
                 <div class="collapse navbar-collapse" id="mainNav">
                     <ul class="navbar-nav me-auto gap-lg-2">
                         <li class="nav-item"><a class="nav-link" asp-controller="Facilities" asp-action="Index">Facilities</a></li>
-                        <li class="nav-item"><a class="nav-link" asp-controller="Membership" asp-action="Plans">Membership</a></li>
+                        @if (SignInManager.IsSignedIn(User) && (User.IsInRole(AppRoles.Member) || User.IsInRole(AppRoles.Administrator)))
+                        {
+                            <li class="nav-item"><a class="nav-link" asp-controller="Membership" asp-action="Manage">Membership</a></li>
+                        }
+                        else
+                        {
+                            <li class="nav-item"><a class="nav-link" asp-controller="Membership" asp-action="Plans">Membership</a></li>
+                        }
                         <li class="nav-item"><a class="nav-link" asp-controller="Home" asp-action="Contact">Contact</a></li>
                         @if (SignInManager.IsSignedIn(User))
                         {
                             @if (User.IsInRole(AppRoles.Member) || User.IsInRole(AppRoles.Administrator))
                             {
                                 <li class="nav-item"><a class="nav-link" asp-controller="Member" asp-action="Dashboard">My Dashboard</a></li>
-                                <li class="nav-item"><a class="nav-link" asp-controller="Membership" asp-action="Manage">Membership</a></li>
                                 <li class="nav-item"><a class="nav-link" asp-controller="Guests" asp-action="Index">Guests</a></li>
                             }
                             @if (User.IsInRole(AppRoles.Staff) || User.IsInRole(AppRoles.Administrator))
