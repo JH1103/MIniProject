@@ -21,21 +21,11 @@ public class GuestsController : Controller
     }
 
     [Authorize(Roles = AppRoles.Member + "," + AppRoles.Administrator)]
-    public async Task<IActionResult> Index()
+    public IActionResult Index()
     {
-        var user = await _userManager.GetUserAsync(User);
-        if (user is null)
-        {
-            return Challenge();
-        }
-
-        var guests = await _db.Guests
-            .Include(g => g.Passes)
-            .Where(g => g.HostMemberId == user.Id)
-            .OrderByDescending(g => g.CreatedAt)
-            .ToListAsync();
-
-        return View(guests);
+        // Guest registration lives in the booking flow; keep Pass for QR viewing.
+        TempData["Success"] = "Add guests when creating a reservation. Visitor passes appear on your dashboard.";
+        return RedirectToAction("Dashboard", "Member");
     }
 
     public async Task<IActionResult> Pass(int id)

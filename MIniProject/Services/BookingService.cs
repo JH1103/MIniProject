@@ -71,6 +71,8 @@ public class BookingService
         DateTime startLocal,
         DateTime endLocal,
         IEnumerable<(string FullName, string? IdNumber, string? Phone)> guests,
+        string? notes = null,
+        bool isRecurring = false,
         CancellationToken ct = default)
     {
         await ReleaseExpiredHoldsAsync(ct);
@@ -160,6 +162,9 @@ public class BookingService
             StartUtc = startUtc,
             EndUtc = endUtc,
             Amount = amount,
+            Notes = notes,
+            IsRecurring = isRecurring,
+            RecurrenceGroupId = isRecurring ? Guid.NewGuid().ToString("N") : null,
             CreatedAt = DateTime.UtcNow,
             PaymentHoldExpiresAt = DateTime.UtcNow.AddMinutes(facility.PaymentHoldMinutes),
             Status = facility.BookingMode == BookingMode.ApprovalRequired
@@ -278,9 +283,9 @@ public class BookingService
         return (true, null);
     }
 
-    public List<(DateTime Start, DateTime End, bool Available)> GetDaySlots(Facility facility, DateTime day, IEnumerable<Booking> bookings, IEnumerable<FacilityBlockOut> blockOuts)
+    public List<(DateTime Start, DateTime End, bool Available, string State)> GetDaySlots(Facility facility, DateTime day, IEnumerable<Booking> bookings, IEnumerable<FacilityBlockOut> blockOuts)
     {
-        var slots = new List<(DateTime Start, DateTime End, bool Available)>();
+        var slots = new List<(DateTime Start, DateTime End, bool Available, string State)>();
         var cursor = day.Date.Add(facility.OpenTime);
         var close = day.Date.Add(facility.CloseTime);
         var duration = TimeSpan.FromMinutes(facility.SlotDurationMinutes);
@@ -291,15 +296,31 @@ public class BookingService
             var startUtc = DateTime.SpecifyKind(cursor, DateTimeKind.Local).ToUniversalTime();
             var endUtc = DateTime.SpecifyKind(end, DateTimeKind.Local).ToUniversalTime();
 
-            var taken = bookings.Any(b =>
-                b.Status != BookingStatus.Cancelled &&
-                b.StartUtc < endUtc &&
-                b.EndUtc > startUtc);
+            var overlapping = bookings
+                .Where(b => b.Status != BookingStatus.Cancelled && b.StartUtc < endUtc && b.EndUtc > startUtc)
+                .ToList();
 
             var blocked = blockOuts.Any(b => b.StartUtc < endUtc && b.EndUtc > startUtc);
             var past = startUtc < DateTime.UtcNow;
+            string state;
+            if (blocked || facility.Status != FacilityStatus.Available || past)
+            {
+                state = "blocked";
+            }
+            else if (overlapping.Any(b => b.Status == BookingStatus.Confirmed))
+            {
+                state = "booked";
+            }
+            else if (overlapping.Any())
+            {
+                state = "pending";
+            }
+            else
+            {
+                state = "available";
+            }
 
-            slots.Add((cursor, end, !taken && !blocked && !past && facility.Status == FacilityStatus.Available));
+            slots.Add((cursor, end, state == "available", state));
             cursor = end;
         }
 
