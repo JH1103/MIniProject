@@ -1,6 +1,15 @@
 ﻿@using Microsoft.AspNetCore.Identity
 @inject SignInManager<ApplicationUser> SignInManager
 @inject UserManager<ApplicationUser> UserManager
+@{
+    string? roleLabel = null;
+    if (SignInManager.IsSignedIn(User))
+    {
+        if (User.IsInRole(AppRoles.Administrator)) { roleLabel = "Admin"; }
+        else if (User.IsInRole(AppRoles.Staff)) { roleLabel = "Staff"; }
+        else if (User.IsInRole(AppRoles.Member)) { roleLabel = "Member"; }
+    }
+}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -27,18 +36,8 @@
                 <span class="nav-toggle__bar" aria-hidden="true"></span>
             </button>
 
-            <div class="nav-backdrop" id="navBackdrop" hidden></div>
-
-            <nav class="site-drawer" id="siteDrawer" aria-label="Primary">
+            <nav class="site-drawer site-drawer--desktop" id="siteDrawerDesktop" aria-label="Primary">
                 <div class="site-drawer__panel">
-                    <div class="site-drawer__top d-lg-none">
-                        <span class="brand-mark">
-                            <span class="brand-mark__leaf" aria-hidden="true"></span>
-                            Kota Permai
-                        </span>
-                        <button type="button" class="nav-close" id="navClose" aria-label="Close navigation menu">×</button>
-                    </div>
-
                     <ul class="navbar-nav site-nav__links">
                         <li class="nav-item"><a class="nav-link" asp-controller="Facilities" asp-action="Index">Facilities</a></li>
                         @if (SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Administrator))
@@ -92,6 +91,85 @@
             </nav>
         </div>
     </header>
+
+    @* Mobile overlay lives outside the sticky header so it never shifts page layout *@
+    <div class="nav-backdrop" id="navBackdrop" hidden></div>
+    <aside class="site-drawer site-drawer--mobile" id="siteDrawer" aria-label="Mobile navigation" aria-hidden="true">
+        <div class="site-drawer__panel">
+            <div class="site-drawer__top">
+                <div class="site-drawer__identity">
+                    <span class="site-drawer__avatar" aria-hidden="true">K</span>
+                    <div>
+                        <strong class="site-drawer__title">Kota Permai</strong>
+                        @if (SignInManager.IsSignedIn(User))
+                        {
+                            <div class="site-drawer__subtitle">@User.Identity?.Name</div>
+                            @if (!string.IsNullOrEmpty(roleLabel))
+                            {
+                                <span class="site-drawer__role">@roleLabel</span>
+                            }
+                        }
+                        else
+                        {
+                            <div class="site-drawer__subtitle">Golf &amp; Country Club</div>
+                        }
+                    </div>
+                </div>
+                <button type="button" class="nav-close" id="navClose" aria-label="Close navigation menu">×</button>
+            </div>
+
+            <div class="site-drawer__section-label">Menu</div>
+            <ul class="navbar-nav site-nav__links">
+                <li class="nav-item"><a class="nav-link" asp-controller="Facilities" asp-action="Index">Facilities</a></li>
+                @if (SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Administrator))
+                {
+                    <li class="nav-item"><a class="nav-link" asp-controller="Admin" asp-action="Index" asp-route-tab="membership">Membership</a></li>
+                }
+                else if (SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Member))
+                {
+                    <li class="nav-item"><a class="nav-link" asp-controller="Membership" asp-action="Manage">Membership</a></li>
+                }
+                else
+                {
+                    <li class="nav-item"><a class="nav-link" asp-controller="Membership" asp-action="Plans">Membership</a></li>
+                }
+                <li class="nav-item"><a class="nav-link" asp-controller="Home" asp-action="Contact">Contact</a></li>
+                @if (SignInManager.IsSignedIn(User))
+                {
+                    @if (User.IsInRole(AppRoles.Member) || User.IsInRole(AppRoles.Administrator))
+                    {
+                        <li class="nav-item"><a class="nav-link" asp-controller="Member" asp-action="Dashboard">My Dashboard</a></li>
+                    }
+                    @if (User.IsInRole(AppRoles.Staff) || User.IsInRole(AppRoles.Administrator))
+                    {
+                        <li class="nav-item"><a class="nav-link" asp-controller="Staff" asp-action="Index">Staff</a></li>
+                        <li class="nav-item"><a class="nav-link" asp-controller="Staff" asp-action="CheckIn">Staff operations &amp; check-in</a></li>
+                    }
+                    @if (User.IsInRole(AppRoles.Administrator))
+                    {
+                        <li class="nav-item"><a class="nav-link" asp-controller="Admin" asp-action="Index">Admin governance</a></li>
+                        <li class="nav-item"><a class="nav-link" asp-controller="Reports" asp-action="Index">Reports &amp; analytics</a></li>
+                    }
+                }
+            </ul>
+
+            <div class="site-nav__auth">
+                @if (SignInManager.IsSignedIn(User))
+                {
+                    <div class="nav-user">@User.Identity?.Name</div>
+                    <form asp-controller="Account" asp-action="Logout" method="post" class="site-drawer__logout">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="btn btn-primary w-100">Sign out</button>
+                    </form>
+                }
+                else
+                {
+                    <a class="btn btn-ghost w-100" asp-controller="Account" asp-action="Login">Sign in</a>
+                    <a class="btn btn-primary w-100" asp-controller="Account" asp-action="Register">Join</a>
+                }
+            </div>
+        </div>
+    </aside>
 
     @if (TempData["Success"] is string success)
     {
