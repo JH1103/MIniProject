@@ -56,6 +56,20 @@
     }
   });
 
+  const backToTop = document.getElementById('backToTop');
+  if (backToTop) {
+    const toggleBackToTop = () => {
+      const show = window.scrollY > 320;
+      backToTop.hidden = !show;
+      backToTop.classList.toggle('is-visible', show);
+    };
+    window.addEventListener('scroll', toggleBackToTop, { passive: true });
+    toggleBackToTop();
+    backToTop.addEventListener('click', () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
+
   const tiles = document.querySelectorAll('.facility-tile');
   tiles.forEach((tile, index) => {
     tile.style.animationDelay = `${index * 70}ms`;
