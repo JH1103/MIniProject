@@ -127,48 +127,81 @@
         }
         else if (tab == "membership")
         {
-            <div class="row g-4">
-                <div class="col-lg-4">
-                    <div class="panel">
-                        <h3 class="h5">Membership plans</h3>
-                        @foreach (var plan in plans)
-                        {
-                            <div class="py-2 border-bottom">
-                                <strong>@plan.Name</strong>
-                                <div class="small muted">MYR @plan.AnnualFee.ToString("N2") / year · @plan.DiscountPercent% discount</div>
-                            </div>
-                        }
-                    </div>
+            <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-3">
+                <div>
+                    <h2 class="h4 mb-1">Manage membership</h2>
+                    <p class="muted mb-0">Club-wide plans, subscriptions, auto-renewal status and registered members.</p>
                 </div>
-                <div class="col-lg-8">
-                    <div class="panel">
-                        <h3 class="h5">Members &amp; subscriptions</h3>
-                        <div class="table-responsive">
-                            <table class="table mb-0">
-                                <thead><tr><th>Member</th><th>Plan</th><th>Status</th><th>Ends</th><th>Auto-renew</th></tr></thead>
-                                <tbody>
-                                @foreach (var sub in subscriptions)
-                                {
-                                    <tr>
-                                        <td>@sub.User?.FullName</td>
-                                        <td>@sub.MembershipPlan?.Name</td>
-                                        <td>@sub.Status</td>
-                                        <td>@sub.EndDate.ToString("dd MMM yyyy")</td>
-                                        <td>@(sub.AutoRenew && sub.CancelledAt is null ? "On" : "Off")</td>
-                                    </tr>
-                                }
-                                </tbody>
-                            </table>
-                        </div>
-                        <h4 class="h6 mt-4">Registered accounts</h4>
-                        @foreach (var member in members.Take(12))
-                        {
-                            <div class="d-flex justify-content-between py-1">
-                                <span>@member.FullName <span class="muted small">@member.Email</span></span>
-                                <span class="badge-soft">@member.MembershipStatus</span>
+                <a class="btn btn-ghost btn-sm" asp-controller="Membership" asp-action="Manage">My personal membership</a>
+            </div>
+
+            <div class="panel mb-3">
+                <h3 class="h5 mb-3">Membership plans</h3>
+                <div class="row g-3">
+                    @foreach (var plan in plans)
+                    {
+                        <div class="col-md-4">
+                            <div class="membership-tier-card h-100">
+                                <div class="small text-uppercase muted">Plan</div>
+                                <strong class="d-block" style="font-size:1.25rem">@plan.Name</strong>
+                                <div class="mt-2">MYR @plan.AnnualFee.ToString("N2") / year</div>
+                                <div class="small muted">@plan.DiscountPercent% discount · @plan.MaxGuestsPerBooking guests · @plan.AdvanceBookingDays-day advance</div>
                             </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="panel mb-3">
+                <h3 class="h5">Members &amp; subscriptions</h3>
+                <p class="muted small">Active and recent subscriptions across the clubhouse.</p>
+                <div class="table-responsive">
+                    <table class="table mb-0">
+                        <thead><tr><th>Member</th><th>Plan</th><th>Period</th><th>Status</th><th>Auto-renew</th></tr></thead>
+                        <tbody>
+                        @foreach (var sub in subscriptions)
+                        {
+                            <tr>
+                                <td>
+                                    @sub.User?.FullName
+                                    <div class="small muted">@sub.User?.Email</div>
+                                </td>
+                                <td>@sub.MembershipPlan?.Name</td>
+                                <td>@sub.StartDate.ToString("dd MMM yyyy") – @sub.EndDate.ToString("dd MMM yyyy")</td>
+                                <td>@sub.Status</td>
+                                <td>
+                                    @if (sub.AutoRenew && sub.CancelledAt is null)
+                                    {
+                                        <span class="badge-soft">On</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge-warn">Off</span>
+                                    }
+                                </td>
+                            </tr>
                         }
-                    </div>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h3 class="h5">Registered accounts</h3>
+                <div class="table-responsive">
+                    <table class="table mb-0">
+                        <thead><tr><th>Name</th><th>Email</th><th>Membership status</th></tr></thead>
+                        <tbody>
+                        @foreach (var member in members)
+                        {
+                            <tr>
+                                <td>@member.FullName</td>
+                                <td>@member.Email</td>
+                                <td><span class="badge-soft">@member.MembershipStatus</span></td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
                 </div>
             </div>
         }
