@@ -15,17 +15,31 @@
 </head>
 <body>
     <header class="site-header">
-        <nav class="navbar navbar-expand-lg">
-            <div class="container site-nav">
-                <a class="navbar-brand brand-mark" asp-controller="Home" asp-action="Index">
-                    <span class="brand-mark__leaf" aria-hidden="true"></span>
-                    Kota Permai
-                </a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav" aria-controls="mainNav" aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="collapse navbar-collapse" id="mainNav">
-                    <ul class="navbar-nav site-nav__links gap-lg-1">
+        <div class="container site-nav">
+            <a class="navbar-brand brand-mark" asp-controller="Home" asp-action="Index">
+                <span class="brand-mark__leaf" aria-hidden="true"></span>
+                Kota Permai
+            </a>
+
+            <button class="nav-toggle" type="button" id="navToggle" aria-controls="siteDrawer" aria-expanded="false" aria-label="Open navigation menu">
+                <span class="nav-toggle__bar" aria-hidden="true"></span>
+                <span class="nav-toggle__bar" aria-hidden="true"></span>
+                <span class="nav-toggle__bar" aria-hidden="true"></span>
+            </button>
+
+            <div class="nav-backdrop" id="navBackdrop" hidden></div>
+
+            <nav class="site-drawer" id="siteDrawer" aria-label="Primary">
+                <div class="site-drawer__panel">
+                    <div class="site-drawer__top d-lg-none">
+                        <span class="brand-mark">
+                            <span class="brand-mark__leaf" aria-hidden="true"></span>
+                            Kota Permai
+                        </span>
+                        <button type="button" class="nav-close" id="navClose" aria-label="Close navigation menu">×</button>
+                    </div>
+
+                    <ul class="navbar-nav site-nav__links">
                         <li class="nav-item"><a class="nav-link" asp-controller="Facilities" asp-action="Index">Facilities</a></li>
                         @if (SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Administrator))
                         {
@@ -58,7 +72,8 @@
                             }
                         }
                     </ul>
-                    <div class="site-nav__auth d-flex align-items-center gap-2">
+
+                    <div class="site-nav__auth">
                         @if (SignInManager.IsSignedIn(User))
                         {
                             <span class="nav-user">@User.Identity?.Name</span>
@@ -74,8 +89,8 @@
                         }
                     </div>
                 </div>
-            </div>
-        </nav>
+            </nav>
+        </div>
     </header>
 
     @if (TempData["Success"] is string success)
