@@ -19,6 +19,9 @@
       navToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
       navToggle.setAttribute('aria-label', open ? 'Close navigation menu' : 'Open navigation menu');
     }
+    if (siteDrawer) {
+      siteDrawer.setAttribute('aria-hidden', open ? 'false' : 'true');
+    }
     if (navBackdrop) {
       if (open) navBackdrop.removeAttribute('hidden');
       else navBackdrop.setAttribute('hidden', '');
@@ -28,7 +31,10 @@
   const closeNav = () => setNavOpen(false);
   const toggleNav = () => setNavOpen(!document.body.classList.contains('nav-open'));
 
-  navToggle?.addEventListener('click', toggleNav);
+  navToggle?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggleNav();
+  });
   navClose?.addEventListener('click', closeNav);
   navBackdrop?.addEventListener('click', closeNav);
 
