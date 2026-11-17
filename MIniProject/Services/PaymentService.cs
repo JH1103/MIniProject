@@ -68,7 +68,19 @@ public class PaymentService
             var sub = await _db.Subscriptions.Include(s => s.User).FirstOrDefaultAsync(s => s.Id == invoice.SubscriptionId, ct);
             if (sub is not null)
             {
+                // Enforce a single active membership plan per account.
+                var others = await _db.Subscriptions
+                    .Where(s => s.UserId == sub.UserId &&
+                                s.Id != sub.Id &&
+                                (s.Status == MembershipStatus.Active || s.Status == MembershipStatus.Suspended))
+                    .ToListAsync(ct);
+                foreach (var other in others)
+                {
+                    MembershipChangeHelper.DeactivateSubscription(other);
+                }
+
                 sub.Status = MembershipStatus.Active;
+                sub.CancelledAt = null;
                 if (sub.User is not null)
                 {
                     sub.User.MembershipStatus = MembershipStatus.Active;

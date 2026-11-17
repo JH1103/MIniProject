@@ -53,14 +53,15 @@ public class BookingService
     public async Task<Subscription?> GetActiveSubscriptionAsync(string userId, CancellationToken ct = default)
     {
         var now = DateTime.UtcNow.Date;
+        // One active plan per account: ignore cancelled/replaced rows.
         return await _db.Subscriptions
             .Include(s => s.MembershipPlan)
             .Where(s => s.UserId == userId &&
                         s.Status == MembershipStatus.Active &&
+                        s.CancelledAt == null &&
                         s.StartDate <= now &&
                         s.EndDate >= now)
-            .OrderBy(s => s.CancelledAt == null ? 0 : 1)
-            .ThenByDescending(s => s.CreatedAt)
+            .OrderByDescending(s => s.CreatedAt)
             .ThenByDescending(s => s.EndDate)
             .FirstOrDefaultAsync(ct);
     }
