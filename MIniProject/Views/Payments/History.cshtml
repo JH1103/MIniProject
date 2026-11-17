@@ -1,4 +1,4 @@
-@model List<Invoice>
+@model PaymentHistoryViewModel
 @{
     ViewData["Title"] = "Invoices & payments";
 }
@@ -6,44 +6,134 @@
 <section class="section">
     <div class="container">
         <div class="section-head">
-            <h2>Invoices & payment history</h2>
-            <p class="muted mb-0">Downloadable receipts and unpaid invoices in one place.</p>
+            <h2>Invoices &amp; payment history</h2>
+            <p class="muted mb-0">Unpaid invoices, completed payments, and approved refunds in one place.</p>
         </div>
-        <div class="panel">
-            <div class="table-responsive">
-                <table class="table align-middle">
-                    <thead>
-                        <tr>
-                            <th>Invoice</th>
-                            <th>Description</th>
-                            <th>Amount</th>
-                            <th>Status</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                    @foreach (var invoice in Model)
-                    {
-                        <tr>
-                            <td>@invoice.InvoiceNumber</td>
-                            <td>@invoice.Description</td>
-                            <td>MYR @invoice.Amount.ToString("N2")</td>
-                            <td><span class="badge-soft">@invoice.Status</span></td>
-                            <td class="text-end">
-                                @if (invoice.Status == InvoiceStatus.Unpaid)
-                                {
-                                    <a asp-action="Pay" asp-route-id="@invoice.Id">Pay</a>
-                                }
-                                else
-                                {
-                                    <a asp-action="Receipt" asp-route-id="@invoice.Id">Receipt</a>
-                                }
-                            </td>
-                        </tr>
-                    }
-                    </tbody>
-                </table>
+
+        <div class="stat-row mb-4">
+            <div class="stat">
+                <span class="muted">Unpaid invoices</span>
+                <strong>@Model.UnpaidCount</strong>
             </div>
+            <div class="stat">
+                <span class="muted">Total paid</span>
+                <strong>MYR @Model.TotalPaid.ToString("N2")</strong>
+            </div>
+            <div class="stat">
+                <span class="muted">Total refunded</span>
+                <strong>MYR @Model.TotalRefunded.ToString("N2")</strong>
+            </div>
+        </div>
+
+        @if (Model.UnpaidInvoices.Any())
+        {
+            <div class="panel mb-4">
+                <h3 class="h5 mb-1">Action needed · unpaid invoices</h3>
+                <p class="muted small mb-3">Pay these to confirm bookings or activate membership changes.</p>
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Invoice</th>
+                                <th>Description</th>
+                                <th>Issued</th>
+                                <th>Due</th>
+                                <th>Amount</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var invoice in Model.UnpaidInvoices)
+                        {
+                            <tr>
+                                <td><code>@invoice.InvoiceNumber</code></td>
+                                <td>@invoice.Description</td>
+                                <td>@invoice.IssuedAt.ToLocalTime().ToString("dd MMM yyyy")</td>
+                                <td>@(invoice.DueAt?.ToLocalTime().ToString("dd MMM yyyy") ?? "—")</td>
+                                <td><strong>MYR @invoice.Amount.ToString("N2")</strong></td>
+                                <td class="text-end">
+                                    <a class="btn btn-sm btn-primary" asp-action="Pay" asp-route-id="@invoice.Id">Pay now</a>
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
+        <div class="panel">
+            <h3 class="h5 mb-1">Payment &amp; refund timeline</h3>
+            <p class="muted small mb-3">Newest activity first. Open a receipt for full details.</p>
+
+            @if (!Model.Timeline.Any())
+            {
+                <p class="muted mb-0">No payments or refunds yet.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>When</th>
+                                <th>Type</th>
+                                <th>Details</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var item in Model.Timeline)
+                        {
+                            <tr>
+                                <td>@item.When.ToLocalTime().ToString("dd MMM yyyy HH:mm")</td>
+                                <td>
+                                    @if (item.Type == "Refund")
+                                    {
+                                        <span class="badge-warn">Refund</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge-soft">Payment</span>
+                                    }
+                                </td>
+                                <td>
+                                    <strong>@item.Title</strong>
+                                    <div class="small muted">@item.Detail</div>
+                                </td>
+                                <td>
+                                    @if (item.IsCredit)
+                                    {
+                                        <span style="color:var(--forest)">+ MYR @item.Amount.ToString("N2")</span>
+                                    }
+                                    else
+                                    {
+                                        <span>MYR @item.Amount.ToString("N2")</span>
+                                    }
+                                </td>
+                                <td>@item.Status</td>
+                                <td class="text-end text-nowrap">
+                                    @if (item.Type == "Refund" && item.RefundId is not null && item.Status == nameof(RefundStatus.Completed))
+                                    {
+                                        <a asp-action="RefundReceipt" asp-route-id="@item.RefundId">Refund receipt</a>
+                                    }
+                                    else if (item.Type == "Refund" && item.Status != nameof(RefundStatus.Completed))
+                                    {
+                                        <span class="muted small">Awaiting admin</span>
+                                    }
+                                    else if (item.InvoiceId is not null)
+                                    {
+                                        <a asp-action="Receipt" asp-route-id="@item.InvoiceId">Receipt</a>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            }
         </div>
     </div>
 </section>
