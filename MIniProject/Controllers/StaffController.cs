@@ -47,6 +47,30 @@ public class StaffController : Controller
         return View();
     }
 
+    /// <summary>Staff may view membership plans and member subscriptions only (no create/update/delete).</summary>
+    [HttpGet]
+    public async Task<IActionResult> Membership()
+    {
+        ViewBag.Plans = await _db.MembershipPlans
+            .Where(p => p.IsActive)
+            .OrderBy(p => p.AnnualFee)
+            .ToListAsync();
+
+        ViewBag.Subscriptions = await _db.Subscriptions
+            .Include(s => s.MembershipPlan)
+            .Include(s => s.User)
+            .OrderByDescending(s => s.CreatedAt)
+            .Take(50)
+            .ToListAsync();
+
+        ViewBag.Members = await _db.Users
+            .OrderBy(u => u.FullName)
+            .Take(50)
+            .ToListAsync();
+
+        return View();
+    }
+
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Approve(int id)
     {
