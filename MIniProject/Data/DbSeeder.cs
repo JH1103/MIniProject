@@ -85,7 +85,7 @@ public static class DbSeeder
             fullName: "System Administrator",
             password: "Admin@12345",
             role: AppRoles.Administrator,
-            planName: "Premium");
+            planName: null);
 
         await EnsureUserAsync(userManager, db,
             email: "staff@kotapermai.local",
@@ -107,7 +107,7 @@ public static class DbSeeder
             fullName: "System Administrator",
             password: "Admin@12345",
             role: AppRoles.Administrator,
-            planName: "Premium");
+            planName: null);
 
         await EnsureUserAsync(userManager, db,
             email: "staff@clubhouse.local",
@@ -465,29 +465,59 @@ public static class DbSeeder
             await userManager.AddToRoleAsync(user, role);
         }
 
-        if (planName is not null)
+        // Staff/Admin work accounts must not hold personal membership plans.
+        if (role is AppRoles.Administrator or AppRoles.Staff || planName is null)
         {
-            var plan = await db.MembershipPlans.FirstAsync(p => p.Name == planName);
-            var hasActive = await db.Subscriptions.AnyAsync(s =>
-                s.UserId == user.Id &&
-                s.Status == MembershipStatus.Active &&
-                s.EndDate >= DateTime.UtcNow);
-
-            if (!hasActive)
+            var workSubs = await db.Subscriptions
+                .Where(s => s.UserId == user.Id &&
+                            (s.Status == MembershipStatus.Active || s.Status == MembershipStatus.Suspended) &&
+                            s.CancelledAt == null)
+                .ToListAsync();
+            if (workSubs.Count > 0)
             {
-                db.Subscriptions.Add(new Subscription
+                foreach (var sub in workSubs)
                 {
-                    UserId = user.Id,
-                    MembershipPlanId = plan.Id,
-                    StartDate = DateTime.UtcNow.Date,
-                    EndDate = DateTime.UtcNow.Date.AddYears(1),
-                    Status = MembershipStatus.Active,
-                    AutoRenew = true
-                });
-                user.MembershipStatus = MembershipStatus.Active;
+                    sub.AutoRenew = false;
+                    sub.CancelledAt = DateTime.UtcNow;
+                    sub.Status = MembershipStatus.Expired;
+                    sub.EndDate = DateTime.UtcNow.Date;
+                }
+            }
+
+            if (user.MembershipStatus != MembershipStatus.Expired)
+            {
+                user.MembershipStatus = MembershipStatus.Expired;
                 await userManager.UpdateAsync(user);
+            }
+
+            if (workSubs.Count > 0)
+            {
                 await db.SaveChangesAsync();
             }
+
+            return;
+        }
+
+        var plan = await db.MembershipPlans.FirstAsync(p => p.Name == planName);
+        var hasActive = await db.Subscriptions.AnyAsync(s =>
+            s.UserId == user.Id &&
+            s.Status == MembershipStatus.Active &&
+            s.EndDate >= DateTime.UtcNow);
+
+        if (!hasActive)
+        {
+            db.Subscriptions.Add(new Subscription
+            {
+                UserId = user.Id,
+                MembershipPlanId = plan.Id,
+                StartDate = DateTime.UtcNow.Date,
+                EndDate = DateTime.UtcNow.Date.AddYears(1),
+                Status = MembershipStatus.Active,
+                AutoRenew = true
+            });
+            user.MembershipStatus = MembershipStatus.Active;
+            await userManager.UpdateAsync(user);
+            await db.SaveChangesAsync();
         }
     }
 
