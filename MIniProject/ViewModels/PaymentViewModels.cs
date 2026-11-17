@@ -50,3 +50,35 @@ public class EWalletPaymentViewModel
     public string PaymentReference { get; set; } = string.Empty;
     public string QrBase64 { get; set; } = string.Empty;
 }
+
+public class PaymentHistoryViewModel
+{
+    public List<Invoice> UnpaidInvoices { get; set; } = [];
+    public List<PaymentHistoryItem> Timeline { get; set; } = [];
+    public decimal TotalPaid { get; set; }
+    public decimal TotalRefunded { get; set; }
+    public int UnpaidCount { get; set; }
+}
+
+public class PaymentHistoryItem
+{
+    public string Type { get; set; } = "Payment"; // Payment | Refund | Invoice
+    public DateTime When { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string Detail { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public int? InvoiceId { get; set; }
+    public int? RefundId { get; set; }
+    public bool IsCredit { get; set; }
+}
+
+public class RefundReceiptViewModel
+{
+    public RefundRequest Refund { get; set; } = null!;
+    public Invoice Invoice { get; set; } = null!;
+    public string MemberName { get; set; } = string.Empty;
+    public string MemberEmail { get; set; } = string.Empty;
+    public string ApprovedByName { get; set; } = "Administrator";
+    public string ApprovedByEmail { get; set; } = string.Empty;
+}

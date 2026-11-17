@@ -319,10 +319,15 @@
                         {
                             @foreach (var refund in refunds)
                             {
-                                <div class="d-flex justify-content-between align-items-center gap-2 py-2 border-bottom">
+                                <div class="d-flex justify-content-between align-items-start gap-2 py-2 border-bottom">
                                     <div>
                                         <strong>@refund.Invoice?.InvoiceNumber</strong>
                                         <div class="small muted">MYR @refund.Amount.ToString("N2") · @refund.Status</div>
+                                        <div class="small muted">@refund.Reason</div>
+                                        @if (refund.Status == RefundStatus.Completed)
+                                        {
+                                            <a class="small" asp-controller="Payments" asp-action="RefundReceipt" asp-route-id="@refund.Id">View refund receipt</a>
+                                        }
                                     </div>
                                     @if (refund.Status is RefundStatus.Pending or RefundStatus.Approved)
                                     {
