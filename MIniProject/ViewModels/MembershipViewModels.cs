@@ -15,6 +15,15 @@ public class SubscribeConfirmViewModel
 
     [Display(Name = "Enable auto-renewal")]
     public bool AutoRenew { get; set; } = true;
+
+    public bool IsPlanChange { get; set; }
+    public string? CurrentPlanName { get; set; }
+    public decimal CurrentAnnualFee { get; set; }
+    public DateTime? KeptEndDate { get; set; }
+    public string ChangeType { get; set; } = "New"; // New | Upgrade | Downgrade
+    public decimal PriceDifference { get; set; }
+    public decimal AmountDue { get; set; }
+    public decimal RefundCredit { get; set; }
 }
 
 public class MembershipManageViewModel

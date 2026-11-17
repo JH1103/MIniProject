@@ -52,17 +52,21 @@ public class MembershipController : Controller
             return NotFound();
         }
 
-        return View(new SubscribeConfirmViewModel
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null)
         {
-            PlanId = plan.Id,
-            PlanName = plan.Name,
-            Description = plan.Description,
-            AnnualFee = plan.AnnualFee,
-            AdvanceBookingDays = plan.AdvanceBookingDays,
-            MaxGuestsPerBooking = plan.MaxGuestsPerBooking,
-            DiscountPercent = plan.DiscountPercent,
-            AutoRenew = true
-        });
+            return Challenge();
+        }
+
+        var current = await _bookingService.GetActiveSubscriptionAsync(user.Id);
+        var model = BuildSubscribeModel(plan, current);
+        if (current is not null && current.MembershipPlanId == plan.Id)
+        {
+            TempData["Error"] = "You are already on this membership plan.";
+            return RedirectToAction(nameof(Manage));
+        }
+
+        return View(model);
     }
 
     [Authorize(Roles = AppRoles.Member)]
@@ -81,66 +85,228 @@ public class MembershipController : Controller
             return Challenge();
         }
 
-        model.PlanName = plan.Name;
-        model.Description = plan.Description;
-        model.AnnualFee = plan.AnnualFee;
-        model.AdvanceBookingDays = plan.AdvanceBookingDays;
-        model.MaxGuestsPerBooking = plan.MaxGuestsPerBooking;
-        model.DiscountPercent = plan.DiscountPercent;
+        var current = await _bookingService.GetActiveSubscriptionAsync(user.Id);
+        model = BuildSubscribeModel(plan, current, model.AutoRenew);
 
         if (!ModelState.IsValid)
         {
             return View("Subscribe", model);
         }
 
-        var previous = await _db.Subscriptions
-            .Where(s => s.UserId == user.Id &&
-                        (s.Status == MembershipStatus.Active || s.Status == MembershipStatus.Suspended) &&
-                        s.CancelledAt == null)
-            .ToListAsync();
-        foreach (var old in previous)
+        if (current is not null && current.MembershipPlanId == plan.Id)
         {
-            old.AutoRenew = false;
-            old.CancelledAt = DateTime.UtcNow;
-            if (old.Status == MembershipStatus.Suspended)
-            {
-                old.Status = MembershipStatus.Expired;
-                old.EndDate = DateTime.UtcNow.Date;
-            }
-            // Active plans keep access until their EndDate; new paid plan becomes the managed one after payment.
+            TempData["Error"] = "You are already on this membership plan.";
+            return RedirectToAction(nameof(Manage));
         }
 
-        var subscription = new Subscription
+        // Cancel unfinished pending plan-change invoices for this member.
+        var pendingChangeInvoices = await _db.Invoices
+            .Where(i => i.UserId == user.Id &&
+                        i.SubscriptionId != null &&
+                        (i.Status == InvoiceStatus.Unpaid || i.Status == InvoiceStatus.Overdue) &&
+                        i.BookingId == null)
+            .ToListAsync();
+        foreach (var pending in pendingChangeInvoices)
+        {
+            pending.Status = InvoiceStatus.Cancelled;
+        }
+
+        var previous = await _db.Subscriptions
+            .Include(s => s.MembershipPlan)
+            .Where(s => s.UserId == user.Id &&
+                        (s.Status == MembershipStatus.Active || s.Status == MembershipStatus.Suspended))
+            .ToListAsync();
+
+        var keptEndDate = current?.EndDate.Date ?? DateTime.UtcNow.Date.AddYears(1);
+        var isChange = current?.MembershipPlan is not null;
+        var isUpgrade = isChange && plan.AnnualFee > (current!.MembershipPlan!.AnnualFee);
+        var isDowngrade = isChange && plan.AnnualFee < current!.MembershipPlan!.AnnualFee;
+
+        // Only one active plan: deactivate every previous plan immediately.
+        foreach (var old in previous)
+        {
+            MembershipChangeHelper.DeactivateSubscription(old);
+        }
+
+        if (isDowngrade)
+        {
+            var difference = current!.MembershipPlan!.AnnualFee - plan.AnnualFee;
+            var refundCredit = Math.Round(difference * MembershipChangeHelper.DowngradeRefundRate, 2);
+
+            var subscription = new Subscription
+            {
+                UserId = user.Id,
+                MembershipPlanId = plan.Id,
+                StartDate = DateTime.UtcNow.Date,
+                EndDate = keptEndDate,
+                Status = MembershipStatus.Active,
+                AutoRenew = model.AutoRenew,
+                CancelledAt = null
+            };
+            _db.Subscriptions.Add(subscription);
+            user.MembershipStatus = MembershipStatus.Active;
+            await _db.SaveChangesAsync();
+
+            var paidInvoice = await _db.Invoices
+                .Where(i => i.UserId == user.Id &&
+                            i.SubscriptionId == current.Id &&
+                            i.Status == InvoiceStatus.Paid)
+                .OrderByDescending(i => i.PaidAt)
+                .FirstOrDefaultAsync();
+
+            if (paidInvoice is null)
+            {
+                paidInvoice = await _db.Invoices
+                    .Where(i => i.UserId == user.Id &&
+                                i.SubscriptionId != null &&
+                                i.Status == InvoiceStatus.Paid)
+                    .OrderByDescending(i => i.PaidAt)
+                    .FirstOrDefaultAsync();
+            }
+
+            if (paidInvoice is not null && refundCredit > 0)
+            {
+                _db.RefundRequests.Add(new RefundRequest
+                {
+                    InvoiceId = paidInvoice.Id,
+                    Amount = refundCredit,
+                    Status = RefundStatus.Pending,
+                    Reason = $"Downgrade {current.MembershipPlan.Name} → {plan.Name}: 75% of MYR {difference:N2} difference. Expiry kept {keptEndDate:dd MMM yyyy}."
+                });
+            }
+
+            _db.AuditLogs.Add(new AuditLog
+            {
+                UserId = user.Id,
+                Action = "MembershipDowngraded",
+                Entity = $"Subscription:{subscription.Id}",
+                Details = $"{current!.MembershipPlan!.Name} → {plan.Name} · credit MYR {refundCredit:N2} (75%) · ends {keptEndDate:yyyy-MM-dd}"
+            });
+            await _db.SaveChangesAsync();
+
+            TempData["Success"] = refundCredit > 0
+                ? $"Downgraded to {plan.Name}. Expiry stays {keptEndDate:dd MMM yyyy}. A 75% difference credit of MYR {refundCredit:N2} was submitted for refund processing."
+                : $"Downgraded to {plan.Name}. Expiry stays {keptEndDate:dd MMM yyyy}.";
+            return RedirectToAction(nameof(Manage));
+        }
+
+        var amountDue = isUpgrade
+            ? Math.Round(plan.AnnualFee - current!.MembershipPlan!.AnnualFee, 2)
+            : plan.AnnualFee;
+
+        var subscriptionPending = new Subscription
         {
             UserId = user.Id,
             MembershipPlanId = plan.Id,
             StartDate = DateTime.UtcNow.Date,
-            EndDate = DateTime.UtcNow.Date.AddYears(1),
+            EndDate = isChange ? keptEndDate : DateTime.UtcNow.Date.AddYears(1),
             Status = MembershipStatus.Suspended,
             AutoRenew = model.AutoRenew
         };
-        _db.Subscriptions.Add(subscription);
+        _db.Subscriptions.Add(subscriptionPending);
         await _db.SaveChangesAsync();
 
         var renewNote = model.AutoRenew ? " · auto-renewal on" : " · auto-renewal off";
+        string description;
+        if (isUpgrade)
+        {
+            description = $"Upgrade {current!.MembershipPlan!.Name} → {plan.Name}: pay difference MYR {amountDue:N2} (expiry kept {keptEndDate:dd MMM yyyy}){renewNote}";
+        }
+        else
+        {
+            description = $"{plan.Name} membership (1 year){renewNote}";
+        }
+
         var invoice = new Invoice
         {
-            InvoiceNumber = $"MEM-{DateTime.UtcNow:yyyyMMdd}-{subscription.Id:D5}",
+            InvoiceNumber = $"MEM-{DateTime.UtcNow:yyyyMMdd}-{subscriptionPending.Id:D5}",
             UserId = user.Id,
-            SubscriptionId = subscription.Id,
-            Amount = plan.AnnualFee,
+            SubscriptionId = subscriptionPending.Id,
+            Amount = Math.Max(0, amountDue),
             Status = InvoiceStatus.Unpaid,
-            Description = $"{plan.Name} membership (1 year){renewNote}",
+            Description = description,
             DueAt = DateTime.UtcNow.AddDays(3)
         };
         _db.Invoices.Add(invoice);
+
+        _db.AuditLogs.Add(new AuditLog
+        {
+            UserId = user.Id,
+            Action = isUpgrade ? "MembershipUpgradeStarted" : "MembershipSubscribeStarted",
+            Entity = $"Subscription:{subscriptionPending.Id}",
+            Details = description
+        });
         await _db.SaveChangesAsync();
 
-        TempData["Success"] = model.AutoRenew
-            ? "Auto-renewal enabled. Complete payment to activate your membership."
-            : "Auto-renewal disabled. Complete payment to activate your membership for one year.";
+        if (invoice.Amount == 0)
+        {
+            // Edge case: same fee switch — activate without payment.
+            subscriptionPending.Status = MembershipStatus.Active;
+            user.MembershipStatus = MembershipStatus.Active;
+            invoice.Status = InvoiceStatus.Paid;
+            invoice.PaidAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+            TempData["Success"] = $"Switched to {plan.Name}. Expiry stays {subscriptionPending.EndDate:dd MMM yyyy}.";
+            return RedirectToAction(nameof(Manage));
+        }
+
+        TempData["Success"] = isUpgrade
+            ? $"Upgrade to {plan.Name}: pay only the difference (MYR {amountDue:N2}). Expiry stays {keptEndDate:dd MMM yyyy}."
+            : (model.AutoRenew
+                ? "Auto-renewal enabled. Complete payment to activate your membership."
+                : "Auto-renewal disabled. Complete payment to activate your membership for one year.");
 
         return RedirectToAction("Pay", "Payments", new { id = invoice.Id });
+    }
+
+    private static SubscribeConfirmViewModel BuildSubscribeModel(MembershipPlan plan, Subscription? current, bool autoRenew = true)
+    {
+        var model = new SubscribeConfirmViewModel
+        {
+            PlanId = plan.Id,
+            PlanName = plan.Name,
+            Description = plan.Description,
+            AnnualFee = plan.AnnualFee,
+            AdvanceBookingDays = plan.AdvanceBookingDays,
+            MaxGuestsPerBooking = plan.MaxGuestsPerBooking,
+            DiscountPercent = plan.DiscountPercent,
+            AutoRenew = autoRenew
+        };
+
+        if (current?.MembershipPlan is null)
+        {
+            model.ChangeType = "New";
+            model.AmountDue = plan.AnnualFee;
+            model.IsPlanChange = false;
+            return model;
+        }
+
+        model.IsPlanChange = true;
+        model.CurrentPlanName = current.MembershipPlan.Name;
+        model.CurrentAnnualFee = current.MembershipPlan.AnnualFee;
+        model.KeptEndDate = current.EndDate.Date;
+        model.PriceDifference = Math.Abs(plan.AnnualFee - current.MembershipPlan.AnnualFee);
+
+        if (plan.AnnualFee > current.MembershipPlan.AnnualFee)
+        {
+            model.ChangeType = "Upgrade";
+            model.AmountDue = Math.Round(plan.AnnualFee - current.MembershipPlan.AnnualFee, 2);
+            model.RefundCredit = 0;
+        }
+        else if (plan.AnnualFee < current.MembershipPlan.AnnualFee)
+        {
+            model.ChangeType = "Downgrade";
+            model.AmountDue = 0;
+            model.RefundCredit = Math.Round(model.PriceDifference * MembershipChangeHelper.DowngradeRefundRate, 2);
+        }
+        else
+        {
+            model.ChangeType = "Switch";
+            model.AmountDue = 0;
+            model.RefundCredit = 0;
+        }
+
+        return model;
     }
 
     [Authorize(Roles = AppRoles.Member)]

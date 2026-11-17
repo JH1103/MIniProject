@@ -85,8 +85,8 @@
                             <tr>
                                 <td>@item.MembershipPlan?.Name</td>
                                 <td>@item.StartDate.ToString("dd MMM yyyy") – @item.EndDate.ToString("dd MMM yyyy")</td>
-                                <td>@item.Status</td>
-                                <td>@(item.AutoRenew && item.CancelledAt is null ? "On" : "Off")</td>
+                                <td>@MembershipChangeHelper.DisplayStatus(item)</td>
+                                <td>@(item.AutoRenew && item.CancelledAt is null && item.Status == MembershipStatus.Active ? "On" : "Off")</td>
                             </tr>
                         }
                         </tbody>

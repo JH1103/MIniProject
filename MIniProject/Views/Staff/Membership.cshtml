@@ -69,9 +69,21 @@
                             </td>
                             <td>@sub.MembershipPlan?.Name</td>
                             <td>@sub.StartDate.ToString("dd MMM yyyy") – @sub.EndDate.ToString("dd MMM yyyy")</td>
-                            <td>@sub.Status</td>
                             <td>
-                                @if (sub.AutoRenew && sub.CancelledAt is null)
+                                @{
+                                    var statusLabel = MembershipChangeHelper.DisplayStatus(sub);
+                                }
+                                @if (statusLabel == "Active")
+                                {
+                                    <span class="badge-soft">@statusLabel</span>
+                                }
+                                else
+                                {
+                                    <span class="badge-warn">@statusLabel</span>
+                                }
+                            </td>
+                            <td>
+                                @if (sub.AutoRenew && sub.CancelledAt is null && sub.Status == MembershipStatus.Active)
                                 {
                                     <span class="badge-soft">On</span>
                                 }
