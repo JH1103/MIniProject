@@ -130,12 +130,9 @@
             <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-3">
                 <div>
                     <h2 class="h4 mb-1">Manage membership</h2>
-                    <p class="muted mb-0">Create, update and delete membership plans. View club-wide subscriptions and members.</p>
+                    <p class="muted mb-0">Create, update and delete membership plans for members. Administrator accounts do not hold a personal membership plan.</p>
                 </div>
-                <div class="d-flex flex-wrap gap-2">
-                    <a class="btn btn-primary btn-sm" asp-action="EditPlan">+ Create plan</a>
-                    <a class="btn btn-ghost btn-sm" asp-controller="Membership" asp-action="Manage">My personal membership</a>
-                </div>
+                <a class="btn btn-primary btn-sm" asp-action="EditPlan">+ Create plan</a>
             </div>
 
             <div class="panel mb-3">

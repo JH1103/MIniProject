@@ -69,7 +69,11 @@
                             <li>Up to @plan.MaxGuestsPerBooking guests per booking</li>
                             <li>@plan.DiscountPercent% facility discount</li>
                         </ul>
-                        @if (isCurrent)
+                        @if (User.IsInRole(AppRoles.Administrator) || User.IsInRole(AppRoles.Staff))
+                        {
+                            <button class="btn btn-ghost" type="button" disabled>Staff/Admin accounts cannot subscribe</button>
+                        }
+                        else if (isCurrent)
                         {
                             <button class="btn btn-current-plan" type="button" disabled>Current plan</button>
                         }

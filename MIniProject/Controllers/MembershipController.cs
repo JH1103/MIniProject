@@ -27,7 +27,10 @@ public class MembershipController : Controller
         var plans = await _db.MembershipPlans.Where(p => p.IsActive).OrderBy(p => p.AnnualFee).ToListAsync();
         ViewBag.ChangeMode = change;
 
-        if (User.Identity?.IsAuthenticated == true)
+        // Personal plan browsing/subscribe is for members only.
+        if (User.Identity?.IsAuthenticated == true &&
+            !User.IsInRole(AppRoles.Administrator) &&
+            !User.IsInRole(AppRoles.Staff))
         {
             var user = await _userManager.GetUserAsync(User);
             if (user is not null)
@@ -39,7 +42,7 @@ public class MembershipController : Controller
         return View(plans);
     }
 
-    [Authorize(Roles = AppRoles.Member + "," + AppRoles.Administrator)]
+    [Authorize(Roles = AppRoles.Member)]
     [HttpGet]
     public async Task<IActionResult> Subscribe(int planId)
     {
@@ -62,7 +65,7 @@ public class MembershipController : Controller
         });
     }
 
-    [Authorize(Roles = AppRoles.Member + "," + AppRoles.Administrator)]
+    [Authorize(Roles = AppRoles.Member)]
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> ConfirmSubscribe(SubscribeConfirmViewModel model)
     {
@@ -140,7 +143,7 @@ public class MembershipController : Controller
         return RedirectToAction("Pay", "Payments", new { id = invoice.Id });
     }
 
-    [Authorize(Roles = AppRoles.Member + "," + AppRoles.Administrator)]
+    [Authorize(Roles = AppRoles.Member)]
     [HttpGet]
     public async Task<IActionResult> Manage()
     {
@@ -148,6 +151,12 @@ public class MembershipController : Controller
         if (user is null)
         {
             return Challenge();
+        }
+
+        if (User.IsInRole(AppRoles.Administrator) || User.IsInRole(AppRoles.Staff))
+        {
+            TempData["Error"] = "Staff and administrator work accounts do not hold personal membership plans.";
+            return RedirectToAction("Index", "Home");
         }
 
         var active = await _bookingService.GetActiveSubscriptionAsync(user.Id);
@@ -165,7 +174,7 @@ public class MembershipController : Controller
         });
     }
 
-    [Authorize(Roles = AppRoles.Member + "," + AppRoles.Administrator)]
+    [Authorize(Roles = AppRoles.Member)]
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> ToggleAutoRenew(int id, bool autoRenew)
     {
@@ -201,7 +210,7 @@ public class MembershipController : Controller
         return RedirectToAction(nameof(Manage));
     }
 
-    [Authorize(Roles = AppRoles.Member + "," + AppRoles.Administrator)]
+    [Authorize(Roles = AppRoles.Member)]
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Unsubscribe(int id)
     {
