@@ -1,0 +1,91 @@
+@model SubscribeConfirmViewModel
+@{
+    ViewData["Title"] = "Confirm membership";
+    var isUpgrade = Model.ChangeType == "Upgrade";
+    var isDowngrade = Model.ChangeType == "Downgrade";
+}
+
+<section class="section">
+    <div class="container" style="max-width:640px">
+        <div class="section-head">
+            <h2>Confirm @Model.PlanName membership</h2>
+            <p class="muted mb-0">
+                @if (Model.IsPlanChange)
+                {
+                    <text>Changing from <strong>@Model.CurrentPlanName</strong>. Only one active plan is allowed per account.</text>
+                }
+                else
+                {
+                    <text>Review your plan and choose whether to renew automatically before payment.</text>
+                }
+            </p>
+        </div>
+
+        <form asp-action="ConfirmSubscribe" method="post" class="panel">
+            @Html.AntiForgeryToken()
+            <input type="hidden" asp-for="PlanId" />
+
+            <div class="mb-3">
+                <strong class="d-block" style="font-size:1.6rem;font-family:var(--font-display)">MYR @Model.AnnualFee.ToString("N2")</strong>
+                <span class="muted">listed annual fee</span>
+            </div>
+            <p class="muted">@Model.Description</p>
+            <ul class="mb-4">
+                <li>Book up to @Model.AdvanceBookingDays days ahead</li>
+                <li>Up to @Model.MaxGuestsPerBooking guests per booking</li>
+                <li>@Model.DiscountPercent% facility discount</li>
+            </ul>
+
+            @if (Model.IsPlanChange)
+            {
+                <div class="panel mb-4" style="box-shadow:none;background:rgba(47,122,109,0.06)">
+                    <h3 class="h6">Plan change summary</h3>
+                    <ul class="mb-0">
+                        <li>Current plan <strong>@Model.CurrentPlanName</strong> (MYR @Model.CurrentAnnualFee.ToString("N2")) will become <strong>Inactive</strong>.</li>
+                        <li>Expiry date stays <strong>@(Model.KeptEndDate?.ToString("dd MMM yyyy") ?? "—")</strong> (not reset to a new year).</li>
+                        @if (isUpgrade)
+                        {
+                            <li>Upgrade charge: pay only the difference <strong>MYR @Model.AmountDue.ToString("N2")</strong>.</li>
+                        }
+                        else if (isDowngrade)
+                        {
+                            <li>Downgrade credit: <strong>MYR @Model.RefundCredit.ToString("N2")</strong> (75% of the MYR @Model.PriceDifference.ToString("N2") difference).</li>
+                            <li>No full refund of the price difference — 75% credit only.</li>
+                        }
+                    </ul>
+                </div>
+            }
+
+            <div class="panel mb-4" style="box-shadow:none;background:rgba(47,122,109,0.06)">
+                <h3 class="h6">Auto-renewal</h3>
+                <p class="muted small mb-3">If enabled, your membership will renew automatically when it expires and a new invoice will be prepared.</p>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="radio" name="AutoRenew" id="renewYes" value="true" @(Model.AutoRenew ? "checked" : null) />
+                    <label class="form-check-label" for="renewYes">Yes — auto-renew each year</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="AutoRenew" id="renewNo" value="false" @(!Model.AutoRenew ? "checked" : null) />
+                    <label class="form-check-label" for="renewNo">No — one year only (I will renew manually)</label>
+                </div>
+            </div>
+
+            <div class="d-flex flex-wrap gap-2">
+                <button class="btn btn-primary" type="submit">
+                    @if (isDowngrade)
+                    {
+                        <text>Confirm downgrade</text>
+                    }
+                    else if (isUpgrade)
+                    {
+                        <text>Continue to pay difference</text>
+                    }
+                    else
+                    {
+                        <text>Continue to payment</text>
+                    }
+                </button>
+                <a class="btn btn-ghost" asp-action="Plans" asp-route-change="@(Model.IsPlanChange ? "true" : null)">Back to plans</a>
+            </div>
+        </form>
+    </div>
+</section>

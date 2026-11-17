@@ -1,0 +1,68 @@
+@model RefundReceiptViewModel
+@{
+    ViewData["Title"] = "Refund receipt";
+    var processedAt = Model.Refund.ProcessedAt?.ToLocalTime();
+}
+
+<section class="section">
+    <div class="container" style="max-width:720px">
+        <div class="panel">
+            <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+                <div>
+                    <div class="small text-uppercase muted fw-semibold">Refund receipt</div>
+                    <h2 class="h3 mb-1">Refund approved</h2>
+                    <p class="muted mb-0">Invoice @Model.Invoice.InvoiceNumber</p>
+                </div>
+                <span class="badge-soft">@Model.Refund.Status</span>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <strong>Refund amount</strong>
+                    <div style="font-size:1.6rem;font-family:var(--font-display);color:var(--forest)">
+                        MYR @Model.Refund.Amount.ToString("N2")
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <strong>Original invoice amount</strong>
+                    <div>MYR @Model.Invoice.Amount.ToString("N2")</div>
+                </div>
+                <div class="col-12">
+                    <strong>Reason</strong>
+                    <div>@Model.Refund.Reason</div>
+                </div>
+            </div>
+
+            <hr />
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <strong>Member</strong>
+                    <div>@Model.MemberName</div>
+                    <div class="small muted">@Model.MemberEmail</div>
+                </div>
+                <div class="col-md-6">
+                    <strong>Approved by</strong>
+                    <div>@Model.ApprovedByName</div>
+                    @if (!string.IsNullOrWhiteSpace(Model.ApprovedByEmail))
+                    {
+                        <div class="small muted">@Model.ApprovedByEmail</div>
+                    }
+                </div>
+                <div class="col-md-6">
+                    <strong>Approved at</strong>
+                    <div>@(processedAt?.ToString("dd MMM yyyy HH:mm") ?? "—")</div>
+                </div>
+                <div class="col-md-6">
+                    <strong>Requested at</strong>
+                    <div>@Model.Refund.RequestedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")</div>
+                </div>
+            </div>
+
+            <div class="mt-4 d-flex flex-wrap gap-2">
+                <a class="btn btn-ghost" asp-action="History">Back to payment history</a>
+                <a class="btn btn-ghost" asp-action="Receipt" asp-route-id="@Model.Invoice.Id">Related payment receipt</a>
+            </div>
+        </div>
+    </div>
+</section>

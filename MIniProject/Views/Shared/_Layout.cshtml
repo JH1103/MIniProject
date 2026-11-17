@@ -1,12 +1,21 @@
 ﻿@using Microsoft.AspNetCore.Identity
 @inject SignInManager<ApplicationUser> SignInManager
 @inject UserManager<ApplicationUser> UserManager
+@{
+    string? roleLabel = null;
+    if (SignInManager.IsSignedIn(User))
+    {
+        if (User.IsInRole(AppRoles.Administrator)) { roleLabel = "Admin"; }
+        else if (User.IsInRole(AppRoles.Staff)) { roleLabel = "Staff"; }
+        else if (User.IsInRole(AppRoles.Member)) { roleLabel = "Member"; }
+    }
+}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] · Greenwood Clubhouse</title>
+    <title>@ViewData["Title"] · Kota Permai Golf &amp; Country Club</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -15,40 +24,59 @@
 </head>
 <body>
     <header class="site-header">
-        <nav class="navbar navbar-expand-lg">
-            <div class="container">
-                <a class="navbar-brand brand-mark" asp-controller="Home" asp-action="Index">
-                    <span class="brand-mark__leaf" aria-hidden="true"></span>
-                    Greenwood Clubhouse
-                </a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav" aria-controls="mainNav" aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="collapse navbar-collapse" id="mainNav">
-                    <ul class="navbar-nav me-auto gap-lg-2">
+        <div class="container site-nav">
+            <a class="navbar-brand brand-mark" asp-controller="Home" asp-action="Index">
+                <span class="brand-mark__leaf" aria-hidden="true"></span>
+                Kota Permai
+            </a>
+
+            <button class="nav-toggle" type="button" id="navToggle" aria-controls="siteDrawer" aria-expanded="false" aria-label="Open navigation menu">
+                <span class="nav-toggle__bar" aria-hidden="true"></span>
+                <span class="nav-toggle__bar" aria-hidden="true"></span>
+                <span class="nav-toggle__bar" aria-hidden="true"></span>
+            </button>
+
+            <nav class="site-drawer site-drawer--desktop" id="siteDrawerDesktop" aria-label="Primary">
+                <div class="site-drawer__panel">
+                    <ul class="navbar-nav site-nav__links">
                         <li class="nav-item"><a class="nav-link" asp-controller="Facilities" asp-action="Index">Facilities</a></li>
-                        <li class="nav-item"><a class="nav-link" asp-controller="Membership" asp-action="Plans">Membership</a></li>
+                        @if (SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Administrator))
+                        {
+                            <li class="nav-item"><a class="nav-link" asp-controller="Admin" asp-action="Index" asp-route-tab="membership">Membership</a></li>
+                        }
+                        else if (SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Staff))
+                        {
+                            <li class="nav-item"><a class="nav-link" asp-controller="Staff" asp-action="Membership">Membership</a></li>
+                        }
+                        else if (SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Member))
+                        {
+                            <li class="nav-item"><a class="nav-link" asp-controller="Membership" asp-action="Manage">Membership</a></li>
+                        }
+                        else
+                        {
+                            <li class="nav-item"><a class="nav-link" asp-controller="Membership" asp-action="Plans">Membership</a></li>
+                        }
                         <li class="nav-item"><a class="nav-link" asp-controller="Home" asp-action="Contact">Contact</a></li>
                         @if (SignInManager.IsSignedIn(User))
                         {
                             @if (User.IsInRole(AppRoles.Member) || User.IsInRole(AppRoles.Administrator))
                             {
                                 <li class="nav-item"><a class="nav-link" asp-controller="Member" asp-action="Dashboard">My Dashboard</a></li>
-                                <li class="nav-item"><a class="nav-link" asp-controller="Guests" asp-action="Index">Guests</a></li>
                             }
                             @if (User.IsInRole(AppRoles.Staff) || User.IsInRole(AppRoles.Administrator))
                             {
                                 <li class="nav-item"><a class="nav-link" asp-controller="Staff" asp-action="Index">Staff</a></li>
-                                <li class="nav-item"><a class="nav-link" asp-controller="Staff" asp-action="CheckIn">Check-in</a></li>
+                                <li class="nav-item"><a class="nav-link" asp-controller="Staff" asp-action="CheckIn">Staff operations &amp; check-in</a></li>
                             }
                             @if (User.IsInRole(AppRoles.Administrator))
                             {
-                                <li class="nav-item"><a class="nav-link" asp-controller="Admin" asp-action="Index">Admin</a></li>
-                                <li class="nav-item"><a class="nav-link" asp-controller="Reports" asp-action="Index">Reports</a></li>
+                                <li class="nav-item"><a class="nav-link" asp-controller="Admin" asp-action="Index">Admin governance</a></li>
+                                <li class="nav-item"><a class="nav-link" asp-controller="Reports" asp-action="Index">Reports &amp; analytics</a></li>
                             }
                         }
                     </ul>
-                    <div class="d-flex align-items-center gap-2">
+
+                    <div class="site-nav__auth">
                         @if (SignInManager.IsSignedIn(User))
                         {
                             <span class="nav-user">@User.Identity?.Name</span>
@@ -64,9 +92,92 @@
                         }
                     </div>
                 </div>
-            </div>
-        </nav>
+            </nav>
+        </div>
     </header>
+
+    @* Mobile overlay lives outside the sticky header so it never shifts page layout *@
+    <div class="nav-backdrop" id="navBackdrop" hidden></div>
+    <aside class="site-drawer site-drawer--mobile" id="siteDrawer" aria-label="Mobile navigation" aria-hidden="true">
+        <div class="site-drawer__panel">
+            <div class="site-drawer__top">
+                <div class="site-drawer__identity">
+                    <span class="site-drawer__avatar" aria-hidden="true">K</span>
+                    <div>
+                        <strong class="site-drawer__title">Kota Permai</strong>
+                        @if (SignInManager.IsSignedIn(User))
+                        {
+                            <div class="site-drawer__subtitle">@User.Identity?.Name</div>
+                            @if (!string.IsNullOrEmpty(roleLabel))
+                            {
+                                <span class="site-drawer__role">@roleLabel</span>
+                            }
+                        }
+                        else
+                        {
+                            <div class="site-drawer__subtitle">Golf &amp; Country Club</div>
+                        }
+                    </div>
+                </div>
+                <button type="button" class="nav-close" id="navClose" aria-label="Close navigation menu">×</button>
+            </div>
+
+            <div class="site-drawer__section-label">Menu</div>
+            <ul class="navbar-nav site-nav__links">
+                <li class="nav-item"><a class="nav-link" asp-controller="Facilities" asp-action="Index">Facilities</a></li>
+                @if (SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Administrator))
+                {
+                    <li class="nav-item"><a class="nav-link" asp-controller="Admin" asp-action="Index" asp-route-tab="membership">Membership</a></li>
+                }
+                else if (SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Staff))
+                {
+                    <li class="nav-item"><a class="nav-link" asp-controller="Staff" asp-action="Membership">Membership</a></li>
+                }
+                else if (SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Member))
+                {
+                    <li class="nav-item"><a class="nav-link" asp-controller="Membership" asp-action="Manage">Membership</a></li>
+                }
+                else
+                {
+                    <li class="nav-item"><a class="nav-link" asp-controller="Membership" asp-action="Plans">Membership</a></li>
+                }
+                <li class="nav-item"><a class="nav-link" asp-controller="Home" asp-action="Contact">Contact</a></li>
+                @if (SignInManager.IsSignedIn(User))
+                {
+                    @if (User.IsInRole(AppRoles.Member) || User.IsInRole(AppRoles.Administrator))
+                    {
+                        <li class="nav-item"><a class="nav-link" asp-controller="Member" asp-action="Dashboard">My Dashboard</a></li>
+                    }
+                    @if (User.IsInRole(AppRoles.Staff) || User.IsInRole(AppRoles.Administrator))
+                    {
+                        <li class="nav-item"><a class="nav-link" asp-controller="Staff" asp-action="Index">Staff</a></li>
+                        <li class="nav-item"><a class="nav-link" asp-controller="Staff" asp-action="CheckIn">Staff operations &amp; check-in</a></li>
+                    }
+                    @if (User.IsInRole(AppRoles.Administrator))
+                    {
+                        <li class="nav-item"><a class="nav-link" asp-controller="Admin" asp-action="Index">Admin governance</a></li>
+                        <li class="nav-item"><a class="nav-link" asp-controller="Reports" asp-action="Index">Reports &amp; analytics</a></li>
+                    }
+                }
+            </ul>
+
+            <div class="site-nav__auth">
+                @if (SignInManager.IsSignedIn(User))
+                {
+                    <div class="nav-user">@User.Identity?.Name</div>
+                    <form asp-controller="Account" asp-action="Logout" method="post" class="site-drawer__logout">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="btn btn-primary w-100">Sign out</button>
+                    </form>
+                }
+                else
+                {
+                    <a class="btn btn-ghost w-100" asp-controller="Account" asp-action="Login">Sign in</a>
+                    <a class="btn btn-primary w-100" asp-controller="Account" asp-action="Register">Join</a>
+                }
+            </div>
+        </div>
+    </aside>
 
     @if (TempData["Success"] is string success)
     {
@@ -84,8 +195,8 @@
     <footer class="site-footer">
         <div class="container footer-grid">
             <div>
-                <strong class="brand-mark">Greenwood Clubhouse</strong>
-                <p class="mb-0 mt-2">Reserve halls, courts, pool lanes and BBQ pits online — built for one community clubhouse.</p>
+                <strong class="brand-mark">Kota Permai Golf &amp; Country Club</strong>
+                <p class="mb-0 mt-2">Reserve sports courts, pools, gym, driving range and banquet rooms online — Kota Kemuning, Shah Alam.</p>
             </div>
             <div>
                 <p class="mb-1">MYR payments · English · PDPA notice on registration</p>
@@ -93,6 +204,10 @@
             </div>
         </div>
     </footer>
+
+    <button type="button" class="back-to-top" id="backToTop" aria-label="Back to top" title="Back to top" hidden>
+        <span aria-hidden="true">↑</span>
+    </button>
 
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>

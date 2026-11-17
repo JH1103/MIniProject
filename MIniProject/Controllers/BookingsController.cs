@@ -33,7 +33,9 @@ public class BookingsController : Controller
     [HttpGet]
     public async Task<IActionResult> Create(int facilityId, DateTime? date, string? start, string? end)
     {
-        var facility = await _db.Facilities.FirstOrDefaultAsync(f => f.Id == facilityId && f.IsActive);
+        var facility = await _db.Facilities
+            .Include(f => f.InventoryItems)
+            .FirstOrDefaultAsync(f => f.Id == facilityId && f.IsActive);
         if (facility is null)
         {
             return NotFound();
@@ -63,9 +65,13 @@ public class BookingsController : Controller
         {
             FacilityId = facility.Id,
             FacilityName = facility.Name,
+            FacilityImageUrl = facility.ImageUrl,
             BookingMode = facility.BookingMode,
             HourlyRate = facility.HourlyRate,
             MaxGuests = subscription.MembershipPlan.MaxGuestsPerBooking,
+            MemberDisplayName = user.FullName,
+            MembershipPlanName = subscription.MembershipPlan.Name,
+            DiscountPercent = subscription.MembershipPlan.DiscountPercent,
             Date = day,
             SlotStart = start ?? string.Empty,
             SlotEnd = end ?? string.Empty,
@@ -73,8 +79,17 @@ public class BookingsController : Controller
             {
                 Start = s.Start.ToString("HH:mm"),
                 End = s.End.ToString("HH:mm"),
-                Available = s.Available
+                Available = s.Available,
+                State = s.State
             }).ToList(),
+            Equipment = facility.InventoryItems
+                .OrderBy(i => i.Name)
+                .Select(i => new EquipmentOption
+                {
+                    Name = i.Name,
+                    Quantity = i.Quantity,
+                    Condition = i.Condition.ToString()
+                }).ToList(),
             Guests = Enumerable.Range(0, Math.Min(subscription.MembershipPlan.MaxGuestsPerBooking, 4))
                 .Select(_ => new GuestInputModel())
                 .ToList()
@@ -113,17 +128,26 @@ public class BookingsController : Controller
         var startLocal = model.Date.Date.Add(startTs);
         var endLocal = model.Date.Date.Add(endTs);
 
+        var notes = model.Notes?.Trim();
+        if (model.SelectedEquipment.Count > 0)
+        {
+            var equipmentNote = "Equipment: " + string.Join(", ", model.SelectedEquipment.Where(e => !string.IsNullOrWhiteSpace(e)));
+            notes = string.IsNullOrWhiteSpace(notes) ? equipmentNote : $"{notes}\n{equipmentNote}";
+        }
+
         var (ok, error, booking) = await _bookingService.CreateBookingAsync(
             user.Id,
             model.FacilityId,
             startLocal,
             endLocal,
-            model.Guests.Select(g => (g.FullName ?? string.Empty, g.IdentificationNumber, g.Phone)));
+            model.Guests.Select(g => (g.FullName ?? string.Empty, g.IdentificationNumber, g.Phone)),
+            notes,
+            model.IsRecurring);
 
         if (!ok || booking is null)
         {
             TempData["Error"] = error ?? "Unable to create booking.";
-            return RedirectToAction(nameof(Create), new { facilityId = model.FacilityId, date = model.Date.ToString("yyyy-MM-dd") });
+            return RedirectToAction(nameof(Create), new { facilityId = model.FacilityId, date = model.Date.ToString("yyyy-MM-dd"), start = model.SlotStart, end = model.SlotEnd });
         }
 
         TempData["Success"] = facility.BookingMode == BookingMode.ApprovalRequired

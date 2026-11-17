@@ -1,0 +1,121 @@
+@{
+    ViewData["Title"] = "Member membership plans";
+    var plans = ViewBag.Plans as List<MembershipPlan> ?? new();
+    var subscriptions = ViewBag.Subscriptions as List<Subscription> ?? new();
+    var members = ViewBag.Members as List<ApplicationUser> ?? new();
+}
+
+<section class="section">
+    <div class="container">
+        <div class="section-head">
+            <h2>Member membership plans</h2>
+            <p class="muted mb-0">Staff can view plans and member subscriptions only. Creating, editing or deleting plans is restricted to administrators.</p>
+        </div>
+
+        <div class="panel mb-3" style="background:rgba(47,122,109,0.08);box-shadow:none">
+            <strong>View only</strong>
+            <span class="muted"> · Contact an administrator to change membership plan details.</span>
+        </div>
+
+        <div class="panel mb-4">
+            <h3 class="h5 mb-3">Available membership plans</h3>
+            @if (!plans.Any())
+            {
+                <p class="muted mb-0">No active membership plans.</p>
+            }
+            else
+            {
+                <div class="row g-3">
+                    @foreach (var plan in plans)
+                    {
+                        <div class="col-md-4">
+                            <div class="membership-tier-card h-100">
+                                <div class="small text-uppercase muted">Plan</div>
+                                <strong class="d-block" style="font-size:1.25rem">@plan.Name</strong>
+                                <div class="mt-2">MYR @plan.AnnualFee.ToString("N2") / year</div>
+                                <div class="small muted">@plan.DiscountPercent% discount · @plan.MaxGuestsPerBooking guests · @plan.AdvanceBookingDays-day advance</div>
+                                @if (!string.IsNullOrWhiteSpace(plan.Description))
+                                {
+                                    <p class="small muted mb-0 mt-2">@plan.Description</p>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="panel mb-4">
+            <h3 class="h5">Member subscriptions</h3>
+            <p class="muted small">Recent member plan assignments across the clubhouse.</p>
+            <div class="table-responsive">
+                <table class="table mb-0">
+                    <thead>
+                        <tr>
+                            <th>Member</th>
+                            <th>Plan</th>
+                            <th>Period</th>
+                            <th>Status</th>
+                            <th>Auto-renew</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var sub in subscriptions)
+                    {
+                        <tr>
+                            <td>
+                                @sub.User?.FullName
+                                <div class="small muted">@sub.User?.Email</div>
+                            </td>
+                            <td>@sub.MembershipPlan?.Name</td>
+                            <td>@sub.StartDate.ToString("dd MMM yyyy") – @sub.EndDate.ToString("dd MMM yyyy")</td>
+                            <td>
+                                @{
+                                    var statusLabel = MembershipChangeHelper.DisplayStatus(sub);
+                                }
+                                @if (statusLabel == "Active")
+                                {
+                                    <span class="badge-soft">@statusLabel</span>
+                                }
+                                else
+                                {
+                                    <span class="badge-warn">@statusLabel</span>
+                                }
+                            </td>
+                            <td>
+                                @if (sub.AutoRenew && sub.CancelledAt is null && sub.Status == MembershipStatus.Active)
+                                {
+                                    <span class="badge-soft">On</span>
+                                }
+                                else
+                                {
+                                    <span class="badge-warn">Off</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h3 class="h5">Registered members</h3>
+            <div class="table-responsive">
+                <table class="table mb-0">
+                    <thead><tr><th>Name</th><th>Email</th><th>Membership status</th></tr></thead>
+                    <tbody>
+                    @foreach (var member in members)
+                    {
+                        <tr>
+                            <td>@member.FullName</td>
+                            <td>@member.Email</td>
+                            <td><span class="badge-soft">@member.MembershipStatus</span></td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</section>

@@ -7,12 +7,15 @@ using MIniProject.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services
     .AddIdentity<ApplicationUser, IdentityRole>(options =>
     {
         options.Password.RequiredLength = 8;
+        options.Password.RequireDigit = true;
+        options.Password.RequireLowercase = true;
+        options.Password.RequireUppercase = true;
         options.Password.RequireNonAlphanumeric = false;
         options.User.RequireUniqueEmail = true;
         options.SignIn.RequireConfirmedAccount = false;
@@ -29,6 +32,7 @@ builder.Services.ConfigureApplicationCookie(options =>
 builder.Services.AddScoped<BookingService>();
 builder.Services.AddScoped<PaymentService>();
 builder.Services.AddScoped<ReportService>();
+builder.Services.AddScoped<ReportPdfService>();
 builder.Services.AddControllersWithViews();
 
 var app = builder.Build();

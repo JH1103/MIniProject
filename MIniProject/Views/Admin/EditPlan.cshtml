@@ -1,0 +1,60 @@
+@model MembershipPlan
+@{
+    ViewData["Title"] = Model.Id == 0 ? "Create membership plan" : "Edit membership plan";
+}
+
+<section class="section">
+    <div class="container" style="max-width:760px">
+        <div class="section-head">
+            <h2>@ViewData["Title"]</h2>
+            <p class="muted mb-0">Administrators can create and update club membership plans. Staff cannot change plans.</p>
+        </div>
+
+        <form asp-action="EditPlan" method="post" class="panel">
+            @Html.AntiForgeryToken()
+            <input type="hidden" asp-for="Id" />
+            <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label asp-for="Name" class="form-label"></label>
+                    <input asp-for="Name" class="form-control" required />
+                    <span asp-validation-for="Name" class="text-danger small"></span>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="AnnualFee" class="form-label">Annual fee (MYR)</label>
+                    <input asp-for="AnnualFee" class="form-control" type="number" step="0.01" min="0" required />
+                </div>
+                <div class="col-12">
+                    <label asp-for="Description" class="form-label"></label>
+                    <textarea asp-for="Description" class="form-control" rows="3"></textarea>
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="AdvanceBookingDays" class="form-label">Advance booking days</label>
+                    <input asp-for="AdvanceBookingDays" class="form-control" type="number" min="0" required />
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="MaxGuestsPerBooking" class="form-label">Max guests per booking</label>
+                    <input asp-for="MaxGuestsPerBooking" class="form-control" type="number" min="0" required />
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="DiscountPercent" class="form-label">Discount %</label>
+                    <input asp-for="DiscountPercent" class="form-control" type="number" step="0.01" min="0" max="100" required />
+                </div>
+                <div class="col-12 form-check mt-3 ms-1">
+                    <input asp-for="IsActive" class="form-check-input" />
+                    <label asp-for="IsActive" class="form-check-label">Active (visible for new subscriptions)</label>
+                </div>
+            </div>
+
+            <div class="mt-4 d-flex flex-wrap gap-2">
+                <button class="btn btn-primary" type="submit">@(Model.Id == 0 ? "Create plan" : "Save changes")</button>
+                <a class="btn btn-ghost" asp-action="Index" asp-route-tab="membership">Cancel</a>
+            </div>
+        </form>
+    </div>
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

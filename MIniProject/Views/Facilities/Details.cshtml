@@ -2,58 +2,88 @@
 @{
     ViewData["Title"] = Model.Name;
     var day = (DateTime)ViewBag.SelectedDate;
-    var slots = ViewBag.Slots as List<(DateTime Start, DateTime End, bool Available)> ?? new();
+    var slots = ViewBag.Slots as List<(DateTime Start, DateTime End, bool Available, string State)> ?? new();
+    var today = DateTime.Today;
+    var dates = Enumerable.Range(0, 21).Select(i => today.AddDays(i)).ToList();
+    var rateLabel = Model.HourlyRate == 0 ? "Member access" : $"RM {Model.HourlyRate:N0}/hr";
+    var slotHours = Math.Max(1, Model.SlotDurationMinutes / 60.0);
+    var slotLabel = slotHours % 1 == 0 ? $"{(int)slotHours} hr(s)" : $"{slotHours:0.#} hr(s)";
 }
 
-<section class="section">
+<section class="section booking-flow">
     <div class="container">
-        <div class="row g-4">
-            <div class="col-lg-6">
-                <img class="w-100 rounded-4 shadow" style="min-height:280px;object-fit:cover" src="@(Model.ImageUrl ?? "/images/function-hall.svg")" alt="@Model.Name" />
-            </div>
-            <div class="col-lg-6">
-                <div class="section-head mb-3">
-                    <span class="badge-soft mb-2">@Model.Category</span>
-                    <h2>@Model.Name</h2>
-                    <p class="muted">@Model.Description</p>
-                </div>
-                <div class="panel">
-                    <div class="row g-3">
-                        <div class="col-6"><strong>Capacity</strong><div class="muted">@Model.Capacity guests</div></div>
-                        <div class="col-6"><strong>Rate</strong><div class="muted">@(Model.HourlyRate == 0 ? "Member access" : $"MYR {Model.HourlyRate:0.00}/hr")</div></div>
-                        <div class="col-6"><strong>Hours</strong><div class="muted">@Model.OpenTime.ToString(@"hh\:mm") – @Model.CloseTime.ToString(@"hh\:mm")</div></div>
-                        <div class="col-6"><strong>Booking</strong><div class="muted">@(Model.BookingMode == BookingMode.ApprovalRequired ? "Approval required" : "Instant confirmation")</div></div>
-                    </div>
-                </div>
-                @if (Model.InventoryItems.Any())
+        <div class="booking-step-label">
+            <span>Step 2: Choose date</span>
+            <span>Current Date: @today.ToString("yyyy-MM-dd")</span>
+        </div>
+
+        <div class="date-carousel mb-4" data-date-carousel>
+            <div class="date-carousel__track" id="dateCarouselTrack">
+                @foreach (var d in dates)
                 {
-                    <div class="panel mt-3">
-                        <h3 class="h6">Inventory available with this facility</h3>
-                        <ul class="mb-0">
-                            @foreach (var item in Model.InventoryItems)
-                            {
-                                <li>@item.Name × @item.Quantity (@item.Condition)</li>
-                            }
-                        </ul>
-                    </div>
+                    var isSelected = d.Date == day.Date;
+                    var isToday = d.Date == today;
+                    <a class="date-chip @(isSelected ? "is-selected" : null)"
+                       asp-action="Details"
+                       asp-route-id="@Model.Id"
+                       asp-route-date="@d.ToString("yyyy-MM-dd")">
+                        @if (isToday)
+                        {
+                            <span class="date-chip__today">Today</span>
+                        }
+                        <span class="date-chip__dow">@d.ToString("ddd").ToUpperInvariant()</span>
+                        <span class="date-chip__day">@d.Day</span>
+                        <span class="date-chip__mon">@d.ToString("MMM").ToUpperInvariant()</span>
+                    </a>
                 }
+            </div>
+            <div class="date-carousel__controls">
+                <button type="button" class="date-carousel__btn" data-scroll="-1" aria-label="Earlier dates">‹</button>
+                <div class="date-carousel__bar"></div>
+                <button type="button" class="date-carousel__btn" data-scroll="1" aria-label="Later dates">›</button>
             </div>
         </div>
 
-        <div class="panel mt-4">
+        <article class="facility-booking-card mb-4">
+            <img class="facility-booking-card__img" src="@(Model.ImageUrl ?? "/images/facility-ballroom.jpg")" alt="@Model.Name" />
+            <div class="facility-booking-card__body">
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                    <h2 class="h4 mb-0 text-white">@Model.Name</h2>
+                    @if (Model.BookingMode == BookingMode.ApprovalRequired)
+                    {
+                        <span class="badge-soft facility-booking-card__badge">Staff Approval Required</span>
+                    }
+                    else
+                    {
+                        <span class="badge-soft facility-booking-card__badge">Instant confirmation</span>
+                    }
+                </div>
+                <p class="facility-booking-card__meta mb-0">
+                    Hours: @Model.OpenTime.ToString(@"hh\:mm") – @Model.CloseTime.ToString(@"hh\:mm")
+                    · Rate: @rateLabel
+                    · Slot duration: @slotLabel
+                    · Capacity: @Model.Capacity
+                </p>
+                @if (!string.IsNullOrWhiteSpace(Model.Description))
+                {
+                    <p class="facility-booking-card__desc mb-0">@Model.Description</p>
+                }
+            </div>
+            <div class="facility-booking-card__legend">
+                <div><span class="dot dot--available"></span> Available</div>
+                <div><span class="dot dot--pending"></span> Pending / Held</div>
+                <div><span class="dot dot--booked"></span> Booked</div>
+            </div>
+        </article>
+
+        <div class="panel">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
                 <div>
                     <h3 class="h5 mb-1">Availability calendar</h3>
-                    <p class="muted mb-0">Select an open slot to start a reservation.</p>
+                    <p class="muted mb-0">Select an open slot to start a reservation for @day.ToString("dd MMM yyyy").</p>
                 </div>
-                <form method="get" class="d-flex gap-2 align-items-end">
-                    <div>
-                        <label class="form-label">Date</label>
-                        <input class="form-control" type="date" name="date" value="@day.ToString("yyyy-MM-dd")" onchange="this.form.submit()" />
-                    </div>
-                </form>
             </div>
-            <div class="slot-grid">
+            <div class="slot-grid slot-grid--status">
                 @foreach (var slot in slots)
                 {
                     if (slot.Available)
@@ -67,19 +97,65 @@
                             @slot.Start.ToString("HH:mm") – @slot.End.ToString("HH:mm")
                         </a>
                     }
-                    else
+                    else if (slot.State == "pending")
                     {
-                        <form asp-controller="Bookings" asp-action="JoinWaitingList" method="post" class="slot is-taken">
+                        <div class="slot is-pending" title="Pending or held">
+                            @slot.Start.ToString("HH:mm") – @slot.End.ToString("HH:mm")
+                        </div>
+                    }
+                    else if (slot.State == "booked")
+                    {
+                        <form asp-controller="Bookings" asp-action="JoinWaitingList" method="post" class="slot is-booked">
                             @Html.AntiForgeryToken()
                             <input type="hidden" name="facilityId" value="@Model.Id" />
                             <input type="hidden" name="date" value="@day.ToString("yyyy-MM-dd")" />
                             <input type="hidden" name="start" value="@slot.Start.ToString("HH:mm")" />
                             <input type="hidden" name="end" value="@slot.End.ToString("HH:mm")" />
-                            <button type="submit" class="btn btn-link p-0 text-decoration-none" style="color:inherit">@slot.Start.ToString("HH:mm") waitlist</button>
+                            <button type="submit" class="btn btn-link p-0 text-decoration-none" style="color:inherit">
+                                @slot.Start.ToString("HH:mm") waitlist
+                            </button>
                         </form>
+                    }
+                    else
+                    {
+                        <div class="slot is-taken">
+                            @slot.Start.ToString("HH:mm") – @slot.End.ToString("HH:mm")
+                        </div>
                     }
                 }
             </div>
+
+            @if (Model.InventoryItems.Any())
+            {
+                <div class="mt-4 pt-3 border-top">
+                    <h3 class="h6">Inventory available with this facility</h3>
+                    <ul class="mb-0">
+                        @foreach (var item in Model.InventoryItems)
+                        {
+                            <li>@item.Name × @item.Quantity (@item.Condition)</li>
+                        }
+                    </ul>
+                </div>
+            }
         </div>
     </div>
 </section>
+
+@section Scripts {
+<script>
+(() => {
+  const track = document.getElementById('dateCarouselTrack');
+  if (!track) return;
+  document.querySelectorAll('[data-scroll]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const dir = Number(btn.getAttribute('data-scroll') || 0);
+      track.scrollBy({ left: dir * 220, behavior: 'smooth' });
+    });
+  });
+  const selected = track.querySelector('.is-selected');
+  if (selected) {
+    selected.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+  }
+})();
+</script>
+}

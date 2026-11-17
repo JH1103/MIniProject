@@ -44,7 +44,12 @@ public class Subscription
 
     public MembershipStatus Status { get; set; } = MembershipStatus.Active;
 
+    /// <summary>When true, the subscription is marked to renew automatically at expiry.</summary>
+    public bool AutoRenew { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public DateTime? CancelledAt { get; set; }
 
     public bool IsValidOn(DateTime date) =>
         Status == MembershipStatus.Active && date.Date >= StartDate.Date && date.Date <= EndDate.Date;

@@ -28,16 +28,24 @@ public class AccountController : Controller
             return View(model);
         }
 
+        var existing = await _userManager.FindByEmailAsync(model.Email);
+        if (existing is not null)
+        {
+            ModelState.AddModelError(nameof(model.Email), "An account with this email already exists. Please sign in instead.");
+            return View(model);
+        }
+
         var user = new ApplicationUser
         {
-            UserName = model.Email,
-            Email = model.Email,
-            FullName = model.FullName,
-            PhoneNumber = model.PhoneNumber,
-            IdentificationNumber = model.IdentificationNumber,
+            UserName = model.Email.Trim(),
+            Email = model.Email.Trim(),
+            FullName = model.FullName.Trim(),
+            PhoneNumber = string.IsNullOrWhiteSpace(model.PhoneNumber) ? null : model.PhoneNumber.Trim(),
+            IdentificationNumber = string.IsNullOrWhiteSpace(model.IdentificationNumber) ? null : model.IdentificationNumber.Trim(),
             PdpaConsent = model.PdpaConsent,
             PdpaConsentAt = DateTime.UtcNow,
-            MembershipStatus = MembershipStatus.Expired
+            MembershipStatus = MembershipStatus.Expired,
+            EmailConfirmed = true
         };
 
         var result = await _userManager.CreateAsync(user, model.Password);
