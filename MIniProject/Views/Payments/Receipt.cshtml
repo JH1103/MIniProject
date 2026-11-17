@@ -1,6 +1,7 @@
 @model Invoice
 @{
     ViewData["Title"] = "Receipt";
+    var refunds = ViewBag.Refunds as List<RefundRequest> ?? new();
 }
 
 <section class="section">
@@ -20,7 +21,22 @@
                 <ul class="mb-0">
                     @foreach (var payment in Model.Payments)
                     {
-                        <li>@payment.Method · @payment.Reference · MYR @payment.Amount.ToString("N2")</li>
+                        <li>@payment.Method · @payment.Reference · MYR @payment.Amount.ToString("N2") · @payment.Status</li>
+                    }
+                </ul>
+            }
+            @if (refunds.Any())
+            {
+                <hr />
+                <h3 class="h6">Approved refunds</h3>
+                <ul class="mb-0">
+                    @foreach (var refund in refunds)
+                    {
+                        <li>
+                            MYR @refund.Amount.ToString("N2")
+                            · @(refund.ProcessedAt?.ToLocalTime().ToString("dd MMM yyyy HH:mm") ?? "—")
+                            · <a asp-action="RefundReceipt" asp-route-id="@refund.Id">View refund receipt</a>
+                        </li>
                     }
                 </ul>
             }

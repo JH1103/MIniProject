@@ -168,7 +168,68 @@ public class PaymentsController : Controller
             return result;
         }
 
+        ViewBag.Refunds = await _db.RefundRequests
+            .Where(r => r.InvoiceId == id && r.Status == RefundStatus.Completed)
+            .OrderByDescending(r => r.ProcessedAt)
+            .ToListAsync();
+
         return View(invoice!);
+    }
+
+    public async Task<IActionResult> RefundReceipt(int id)
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null)
+        {
+            return Challenge();
+        }
+
+        var refund = await _db.RefundRequests
+            .Include(r => r.Invoice!)
+                .ThenInclude(i => i.User)
+            .Include(r => r.Invoice!)
+                .ThenInclude(i => i.Subscription!)
+                .ThenInclude(s => s.MembershipPlan)
+            .FirstOrDefaultAsync(r => r.Id == id);
+
+        if (refund?.Invoice is null)
+        {
+            return NotFound();
+        }
+
+        var isStaff = User.IsInRole(AppRoles.Staff) || User.IsInRole(AppRoles.Administrator);
+        if (!isStaff && refund.Invoice.UserId != user.Id)
+        {
+            return Forbid();
+        }
+
+        if (refund.Status != RefundStatus.Completed)
+        {
+            TempData["Error"] = "A refund receipt is available only after an administrator approves the refund.";
+            return RedirectToAction(nameof(History));
+        }
+
+        string approvedByName = "Administrator";
+        string approvedByEmail = string.Empty;
+        if (!string.IsNullOrWhiteSpace(refund.ProcessedByUserId))
+        {
+            var admin = await _userManager.FindByIdAsync(refund.ProcessedByUserId);
+            if (admin is not null)
+            {
+                approvedByName = string.IsNullOrWhiteSpace(admin.FullName) ? (admin.Email ?? "Administrator") : admin.FullName;
+                approvedByEmail = admin.Email ?? string.Empty;
+            }
+        }
+
+        return View(new RefundReceiptViewModel
+        {
+            Refund = refund,
+            Invoice = refund.Invoice,
+            MemberName = refund.Invoice.User?.FullName ?? "Member",
+            MemberEmail = refund.Invoice.User?.Email ?? string.Empty,
+            ApprovedByName = approvedByName,
+            ApprovedByEmail = approvedByEmail
+        });
     }
 
     public async Task<IActionResult> History()
@@ -182,7 +243,11 @@ public class PaymentsController : Controller
         var isStaff = User.IsInRole(AppRoles.Staff) || User.IsInRole(AppRoles.Administrator);
         var query = _db.Invoices
             .Include(i => i.Payments)
-            .Include(i => i.Booking)
+            .Include(i => i.Refunds)
+            .Include(i => i.Booking!)
+                .ThenInclude(b => b.Facility)
+            .Include(i => i.Subscription!)
+                .ThenInclude(s => s.MembershipPlan)
             .AsQueryable();
 
         if (!isStaff)
@@ -191,7 +256,58 @@ public class PaymentsController : Controller
         }
 
         var invoices = await query.OrderByDescending(i => i.IssuedAt).ToListAsync();
-        return View(invoices);
+        var timeline = new List<PaymentHistoryItem>();
+
+        foreach (var invoice in invoices)
+        {
+            foreach (var payment in invoice.Payments.Where(p => p.Status is PaymentStatus.Completed or PaymentStatus.Refunded))
+            {
+                timeline.Add(new PaymentHistoryItem
+                {
+                    Type = "Payment",
+                    When = payment.CompletedAt ?? payment.CreatedAt,
+                    Title = invoice.Description,
+                    Detail = $"{invoice.InvoiceNumber} · {payment.Method}" +
+                             (string.IsNullOrWhiteSpace(payment.Reference) ? string.Empty : $" · {payment.Reference}"),
+                    Amount = payment.Amount,
+                    Status = payment.Status.ToString(),
+                    InvoiceId = invoice.Id,
+                    IsCredit = false
+                });
+            }
+
+            foreach (var refund in invoice.Refunds)
+            {
+                timeline.Add(new PaymentHistoryItem
+                {
+                    Type = "Refund",
+                    When = refund.ProcessedAt ?? refund.RequestedAt,
+                    Title = refund.Reason.StartsWith("Downgrade", StringComparison.OrdinalIgnoreCase)
+                        ? "Membership downgrade refund"
+                        : "Refund",
+                    Detail = $"{invoice.InvoiceNumber} · {refund.Status}",
+                    Amount = refund.Amount,
+                    Status = refund.Status.ToString(),
+                    InvoiceId = invoice.Id,
+                    RefundId = refund.Id,
+                    IsCredit = true
+                });
+            }
+        }
+
+        var unpaid = invoices
+            .Where(i => i.Status is InvoiceStatus.Unpaid or InvoiceStatus.Overdue)
+            .OrderBy(i => i.DueAt ?? i.IssuedAt)
+            .ToList();
+
+        return View(new PaymentHistoryViewModel
+        {
+            UnpaidInvoices = unpaid,
+            Timeline = timeline.OrderByDescending(t => t.When).ToList(),
+            TotalPaid = timeline.Where(t => t.Type == "Payment").Sum(t => t.Amount),
+            TotalRefunded = timeline.Where(t => t.Type == "Refund" && t.Status == nameof(RefundStatus.Completed)).Sum(t => t.Amount),
+            UnpaidCount = unpaid.Count
+        });
     }
 
     private async Task<(IActionResult? Result, Invoice? Invoice)> TryGetAuthorizedInvoiceAsync(int id, bool includePayments = false)

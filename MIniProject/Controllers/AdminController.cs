@@ -156,24 +156,54 @@ public class AdminController : Controller
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> ProcessRefund(int id, bool approve)
     {
-        var refund = await _db.RefundRequests.Include(r => r.Invoice).FirstOrDefaultAsync(r => r.Id == id);
+        var refund = await _db.RefundRequests
+            .Include(r => r.Invoice)
+            .FirstOrDefaultAsync(r => r.Id == id);
         if (refund is null)
         {
             return NotFound();
         }
 
+        if (refund.Status is RefundStatus.Completed or RefundStatus.Rejected)
+        {
+            TempData["Error"] = "This refund request was already processed.";
+            return RedirectToAction(nameof(Index), new { tab = "invoices" });
+        }
+
+        var adminId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         refund.Status = approve ? RefundStatus.Completed : RefundStatus.Rejected;
         refund.ProcessedAt = DateTime.UtcNow;
+        refund.ProcessedByUserId = adminId;
 
         if (approve && refund.Invoice is not null)
         {
             refund.Invoice.Status = refund.Amount >= refund.Invoice.Amount
                 ? InvoiceStatus.Refunded
                 : InvoiceStatus.PartiallyRefunded;
+
+            foreach (var payment in await _db.PaymentTransactions
+                         .Where(p => p.InvoiceId == refund.InvoiceId && p.Status == PaymentStatus.Completed)
+                         .ToListAsync())
+            {
+                if (refund.Amount >= payment.Amount)
+                {
+                    payment.Status = PaymentStatus.Refunded;
+                }
+            }
         }
 
+        _db.AuditLogs.Add(new AuditLog
+        {
+            UserId = adminId,
+            Action = approve ? "RefundApproved" : "RefundRejected",
+            Entity = $"RefundRequest:{refund.Id}",
+            Details = $"Invoice {refund.Invoice?.InvoiceNumber} · MYR {refund.Amount:N2} · {refund.Reason}"
+        });
+
         await _db.SaveChangesAsync();
-        TempData["Success"] = approve ? "Refund approved." : "Refund rejected.";
+        TempData["Success"] = approve
+            ? $"Refund approved (MYR {refund.Amount:N2}). A refund receipt is available for the member."
+            : "Refund rejected.";
         return RedirectToAction(nameof(Index), new { tab = "invoices" });
     }
 
