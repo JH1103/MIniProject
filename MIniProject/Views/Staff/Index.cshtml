@@ -73,7 +73,10 @@
                             <span class="badge-soft">@facility.Status</span>
                         </div>
                     }
-                    <a class="btn btn-ghost btn-sm mt-3" asp-action="CheckIn">Open guest check-in</a>
+                    <div class="d-flex flex-wrap gap-2 mt-3">
+                        <a class="btn btn-ghost btn-sm" asp-action="CheckIn">Open guest check-in</a>
+                        <a class="btn btn-ghost btn-sm" asp-action="Membership">View memberships</a>
+                    </div>
                 </div>
             </div>
         </div>

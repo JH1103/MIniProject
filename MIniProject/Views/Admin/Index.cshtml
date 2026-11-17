@@ -130,25 +130,68 @@
             <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-3">
                 <div>
                     <h2 class="h4 mb-1">Manage membership</h2>
-                    <p class="muted mb-0">Club-wide plans, subscriptions, auto-renewal status and registered members.</p>
+                    <p class="muted mb-0">Create, update and delete membership plans. View club-wide subscriptions and members.</p>
                 </div>
-                <a class="btn btn-ghost btn-sm" asp-controller="Membership" asp-action="Manage">My personal membership</a>
+                <div class="d-flex flex-wrap gap-2">
+                    <a class="btn btn-primary btn-sm" asp-action="EditPlan">+ Create plan</a>
+                    <a class="btn btn-ghost btn-sm" asp-controller="Membership" asp-action="Manage">My personal membership</a>
+                </div>
             </div>
 
             <div class="panel mb-3">
-                <h3 class="h5 mb-3">Membership plans</h3>
-                <div class="row g-3">
-                    @foreach (var plan in plans)
-                    {
-                        <div class="col-md-4">
-                            <div class="membership-tier-card h-100">
-                                <div class="small text-uppercase muted">Plan</div>
-                                <strong class="d-block" style="font-size:1.25rem">@plan.Name</strong>
-                                <div class="mt-2">MYR @plan.AnnualFee.ToString("N2") / year</div>
-                                <div class="small muted">@plan.DiscountPercent% discount · @plan.MaxGuestsPerBooking guests · @plan.AdvanceBookingDays-day advance</div>
-                            </div>
-                        </div>
-                    }
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                    <h3 class="h5 mb-0">Membership plans</h3>
+                    <span class="small muted">Admin CRUD · Staff is view-only</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table mb-0">
+                        <thead>
+                            <tr>
+                                <th>Plan</th>
+                                <th>Fee</th>
+                                <th>Benefits</th>
+                                <th>Status</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var plan in plans)
+                        {
+                            <tr>
+                                <td>
+                                    <strong>@plan.Name</strong>
+                                    @if (!string.IsNullOrWhiteSpace(plan.Description))
+                                    {
+                                        <div class="small muted">@plan.Description</div>
+                                    }
+                                </td>
+                                <td>MYR @plan.AnnualFee.ToString("N2") / year</td>
+                                <td class="small">
+                                    @plan.DiscountPercent% discount<br />
+                                    @plan.MaxGuestsPerBooking guests · @plan.AdvanceBookingDays-day advance
+                                </td>
+                                <td>
+                                    @if (plan.IsActive)
+                                    {
+                                        <span class="badge-soft">Active</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge-warn">Inactive</span>
+                                    }
+                                </td>
+                                <td class="text-nowrap">
+                                    <a class="btn btn-sm btn-ghost" asp-action="EditPlan" asp-route-id="@plan.Id">Edit</a>
+                                    <form asp-action="DeletePlan" method="post" class="d-inline" onsubmit="return confirm('Delete or deactivate this membership plan?');">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@plan.Id" />
+                                        <button class="btn btn-sm btn-ghost admin-danger" type="submit">Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
                 </div>
             </div>
 

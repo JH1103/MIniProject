@@ -26,12 +26,12 @@ public class AdminController : Controller
         ViewBag.Stats = await _reportService.GetDashboardStatsAsync();
         ViewBag.Facilities = await _db.Facilities.Include(f => f.InventoryItems).OrderBy(f => f.Name).ToListAsync();
         ViewBag.Members = await _db.Users.OrderBy(u => u.FullName).Take(40).ToListAsync();
-        ViewBag.Plans = await _db.MembershipPlans.Where(p => p.IsActive).OrderBy(p => p.AnnualFee).ToListAsync();
+        ViewBag.Plans = await _db.MembershipPlans.OrderByDescending(p => p.IsActive).ThenBy(p => p.AnnualFee).ToListAsync();
         ViewBag.Subscriptions = await _db.Subscriptions
             .Include(s => s.MembershipPlan)
             .Include(s => s.User)
             .OrderByDescending(s => s.CreatedAt)
-            .Take(30)
+            .Take(50)
             .ToListAsync();
         ViewBag.Bookings = await _db.Bookings
             .Include(b => b.Facility)
@@ -190,5 +190,129 @@ public class AdminController : Controller
         await _db.SaveChangesAsync();
         TempData["Success"] = "Setting updated.";
         return RedirectToAction(nameof(Index), new { tab = "audit" });
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> EditPlan(int? id)
+    {
+        if (id is null)
+        {
+            return View(new MembershipPlan
+            {
+                IsActive = true,
+                AdvanceBookingDays = 14,
+                MaxGuestsPerBooking = 4
+            });
+        }
+
+        var plan = await _db.MembershipPlans.FirstOrDefaultAsync(p => p.Id == id);
+        return plan is null ? NotFound() : View(plan);
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditPlan(MembershipPlan model)
+    {
+        if (!ModelState.IsValid)
+        {
+            return View(model);
+        }
+
+        if (model.AnnualFee < 0 || model.DiscountPercent < 0 || model.DiscountPercent > 100)
+        {
+            ModelState.AddModelError(string.Empty, "Fee must be ≥ 0 and discount must be between 0 and 100.");
+            return View(model);
+        }
+
+        if (model.AdvanceBookingDays < 0 || model.MaxGuestsPerBooking < 0)
+        {
+            ModelState.AddModelError(string.Empty, "Advance booking days and guest limit cannot be negative.");
+            return View(model);
+        }
+
+        if (model.Id == 0)
+        {
+            _db.MembershipPlans.Add(model);
+            _db.AuditLogs.Add(new AuditLog
+            {
+                UserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
+                Action = "MembershipPlanCreated",
+                Entity = "MembershipPlan",
+                Details = $"{model.Name} · MYR {model.AnnualFee:N2}"
+            });
+            await _db.SaveChangesAsync();
+            TempData["Success"] = $"Membership plan “{model.Name}” created.";
+        }
+        else
+        {
+            var existing = await _db.MembershipPlans.FirstOrDefaultAsync(p => p.Id == model.Id);
+            if (existing is null)
+            {
+                return NotFound();
+            }
+
+            existing.Name = model.Name.Trim();
+            existing.Description = model.Description?.Trim() ?? string.Empty;
+            existing.AnnualFee = model.AnnualFee;
+            existing.AdvanceBookingDays = model.AdvanceBookingDays;
+            existing.MaxGuestsPerBooking = model.MaxGuestsPerBooking;
+            existing.DiscountPercent = model.DiscountPercent;
+            existing.IsActive = model.IsActive;
+
+            _db.AuditLogs.Add(new AuditLog
+            {
+                UserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
+                Action = "MembershipPlanUpdated",
+                Entity = $"MembershipPlan:{existing.Id}",
+                Details = $"{existing.Name} · MYR {existing.AnnualFee:N2} · active={existing.IsActive}"
+            });
+            await _db.SaveChangesAsync();
+            TempData["Success"] = $"Membership plan “{existing.Name}” updated.";
+        }
+
+        return RedirectToAction(nameof(Index), new { tab = "membership" });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeletePlan(int id)
+    {
+        var plan = await _db.MembershipPlans
+            .Include(p => p.Subscriptions)
+            .FirstOrDefaultAsync(p => p.Id == id);
+
+        if (plan is null)
+        {
+            return NotFound();
+        }
+
+        var hasSubscriptions = plan.Subscriptions.Any();
+        if (hasSubscriptions)
+        {
+            // Soft-delete so historical subscriptions remain valid.
+            plan.IsActive = false;
+            _db.AuditLogs.Add(new AuditLog
+            {
+                UserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
+                Action = "MembershipPlanDeactivated",
+                Entity = $"MembershipPlan:{plan.Id}",
+                Details = $"{plan.Name} deactivated (has existing subscriptions)."
+            });
+            await _db.SaveChangesAsync();
+            TempData["Success"] = $"“{plan.Name}” has subscriptions, so it was deactivated instead of deleted.";
+        }
+        else
+        {
+            _db.MembershipPlans.Remove(plan);
+            _db.AuditLogs.Add(new AuditLog
+            {
+                UserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
+                Action = "MembershipPlanDeleted",
+                Entity = $"MembershipPlan:{id}",
+                Details = plan.Name
+            });
+            await _db.SaveChangesAsync();
+            TempData["Success"] = $"Membership plan “{plan.Name}” deleted.";
+        }
+
+        return RedirectToAction(nameof(Index), new { tab = "membership" });
     }
 }

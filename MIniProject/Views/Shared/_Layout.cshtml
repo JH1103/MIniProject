@@ -44,6 +44,10 @@
                         {
                             <li class="nav-item"><a class="nav-link" asp-controller="Admin" asp-action="Index" asp-route-tab="membership">Membership</a></li>
                         }
+                        else if (SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Staff))
+                        {
+                            <li class="nav-item"><a class="nav-link" asp-controller="Staff" asp-action="Membership">Membership</a></li>
+                        }
                         else if (SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Member))
                         {
                             <li class="nav-item"><a class="nav-link" asp-controller="Membership" asp-action="Manage">Membership</a></li>
@@ -124,6 +128,10 @@
                 @if (SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Administrator))
                 {
                     <li class="nav-item"><a class="nav-link" asp-controller="Admin" asp-action="Index" asp-route-tab="membership">Membership</a></li>
+                }
+                else if (SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Staff))
+                {
+                    <li class="nav-item"><a class="nav-link" asp-controller="Staff" asp-action="Membership">Membership</a></li>
                 }
                 else if (SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Member))
                 {
