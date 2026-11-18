@@ -154,6 +154,18 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.Entity<MemberCheckIn>()
+            .HasOne(c => c.Booking)
+            .WithMany()
+            .HasForeignKey(c => c.BookingId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        builder.Entity<MemberCheckIn>()
+            .HasOne(c => c.Facility)
+            .WithMany()
+            .HasForeignKey(c => c.FacilityId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        builder.Entity<MemberCheckIn>()
             .HasIndex(c => new { c.MemberId, c.CheckedOutAt });
 
         builder.Entity<SystemSetting>()

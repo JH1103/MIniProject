@@ -5,12 +5,15 @@ using Microsoft.EntityFrameworkCore;
 using MIniProject.Data;
 using MIniProject.Models;
 using MIniProject.Services;
+using MIniProject.ViewModels;
 
 namespace MIniProject.Controllers;
 
 [Authorize(Roles = AppRoles.Staff + "," + AppRoles.Administrator)]
 public class StaffController : Controller
 {
+    public const int EarlyCheckInMinutes = 15;
+
     private readonly ApplicationDbContext _db;
     private readonly BookingService _bookingService;
     private readonly UserManager<ApplicationUser> _userManager;
@@ -93,7 +96,7 @@ public class StaffController : Controller
     }
 
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> CheckIn(string passCode, string actionType, string? tab)
+    public async Task<IActionResult> CheckIn(string passCode, string actionType, string? tab, int? bookingId)
     {
         var user = await _userManager.GetUserAsync(User);
         if (user is null)
@@ -108,17 +111,180 @@ public class StaffController : Controller
             return View();
         }
 
+        var normalizedAction = (actionType ?? "lookup").Trim().ToLowerInvariant();
+
         if (MemberPassHelper.TryParseUserId(passCode, out var memberId))
         {
-            await HandleMemberCheckInAsync(memberId, actionType, user.Id);
+            if (normalizedAction is "in" or "out")
+            {
+                await HandleMemberCheckInAsync(memberId, normalizedAction, user.Id, bookingId);
+            }
+            else
+            {
+                await BuildMemberPreviewAsync(memberId, passCode.Trim());
+            }
         }
         else
         {
-            await HandleGuestPassCheckInAsync(passCode, actionType, user.Id);
+            if (normalizedAction is "in" or "out")
+            {
+                await HandleGuestPassCheckInAsync(passCode, normalizedAction, user.Id);
+            }
+            else
+            {
+                await BuildGuestPreviewAsync(passCode);
+            }
         }
 
         await PopulateCheckInViewAsync(tab ?? "clearance");
         return View();
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateClearanceStatus(int id, string kind, ClearanceStatus status, string? tab)
+    {
+        if (string.Equals(kind, "member", StringComparison.OrdinalIgnoreCase))
+        {
+            var row = await _db.MemberCheckIns.FirstOrDefaultAsync(c => c.Id == id && c.CheckedOutAt == null);
+            if (row is null)
+            {
+                TempData["Error"] = "Open member clearance record not found.";
+            }
+            else if (status is ClearanceStatus.CheckedIn or ClearanceStatus.UsingFacility)
+            {
+                row.Status = status;
+                await _db.SaveChangesAsync();
+                TempData["Success"] = $"Member status updated to {FormatClearanceStatus(status)}.";
+            }
+            else
+            {
+                TempData["Error"] = "Invalid clearance status.";
+            }
+        }
+        else
+        {
+            var row = await _db.CheckInRecords.FirstOrDefaultAsync(c => c.Id == id && c.CheckedOutAt == null);
+            if (row is null)
+            {
+                TempData["Error"] = "Open guest clearance record not found.";
+            }
+            else if (status is ClearanceStatus.CheckedIn or ClearanceStatus.UsingFacility)
+            {
+                row.Status = status;
+                await _db.SaveChangesAsync();
+                TempData["Success"] = $"Guest status updated to {FormatClearanceStatus(status)}.";
+            }
+            else
+            {
+                TempData["Error"] = "Invalid clearance status.";
+            }
+        }
+
+        return RedirectToAction(nameof(CheckIn), new { tab = tab ?? "clearance" });
+    }
+
+    private async Task BuildMemberPreviewAsync(string memberId, string passCode)
+    {
+        var member = await _db.Users.FirstOrDefaultAsync(u => u.Id == memberId);
+        if (member is null)
+        {
+            TempData["Error"] = "Member digital card not recognised.";
+            return;
+        }
+
+        var activeSub = await _bookingService.GetActiveSubscriptionAsync(memberId);
+        if (activeSub is null)
+        {
+            TempData["Error"] = $"{member.FullName} has no active membership.";
+            return;
+        }
+
+        var alreadyIn = await _db.MemberCheckIns.AnyAsync(c => c.MemberId == memberId && c.CheckedOutAt == null);
+        var todayBookings = await GetTodayBookingsForMemberAsync(memberId);
+        var (canCheckIn, selectedBooking, blockReason, prompt) = EvaluateCheckInWindow(todayBookings);
+
+        ViewBag.ScanPreview = new CheckInPreviewViewModel
+        {
+            PassCode = passCode,
+            IsMember = true,
+            DisplayName = member.FullName,
+            PlanName = activeSub.MembershipPlan?.Name,
+            Identification = member.IdentificationNumber,
+            AlreadyInside = alreadyIn,
+            CanCheckIn = canCheckIn && !alreadyIn,
+            BlockReason = alreadyIn ? "Member is already checked in." : blockReason,
+            PromptMessage = alreadyIn ? null : prompt,
+            SelectedBookingId = selectedBooking?.Id,
+            TodayBookings = todayBookings.Select(ToBookingRow).ToList()
+        };
+
+        ViewBag.LastMember = member;
+        ViewBag.LastMemberPlan = activeSub.MembershipPlan?.Name;
+
+        if (!string.IsNullOrWhiteSpace(prompt))
+        {
+            TempData["Warning"] = prompt;
+        }
+        else if (!string.IsNullOrWhiteSpace(blockReason) && !alreadyIn)
+        {
+            TempData["Error"] = blockReason;
+        }
+    }
+
+    private async Task BuildGuestPreviewAsync(string passCode)
+    {
+        var pass = await _db.VisitorPasses
+            .Include(p => p.Guest)
+            .Include(p => p.Booking)!.ThenInclude(b => b!.Facility)
+            .Include(p => p.CheckIns)
+            .FirstOrDefaultAsync(p => p.PassCode == passCode.Trim().ToUpperInvariant());
+
+        if (pass is null)
+        {
+            TempData["Error"] = "Visitor pass or member card not found.";
+            return;
+        }
+
+        if (pass.IsRevoked || DateTime.UtcNow < pass.ValidFrom || DateTime.UtcNow > pass.ValidTo)
+        {
+            TempData["Error"] = "Pass is not valid at this time.";
+            ViewBag.LastGuestPass = pass;
+            return;
+        }
+
+        var alreadyIn = pass.CheckIns.Any(c => c.CheckedOutAt == null);
+        var bookings = new List<Booking>();
+        if (pass.Booking is not null && pass.Booking.Status != BookingStatus.Cancelled)
+        {
+            bookings.Add(pass.Booking);
+        }
+
+        var (canCheckIn, selectedBooking, blockReason, prompt) = EvaluateCheckInWindow(bookings, requireToday: true);
+
+        ViewBag.ScanPreview = new CheckInPreviewViewModel
+        {
+            PassCode = pass.PassCode,
+            IsMember = false,
+            DisplayName = pass.Guest?.FullName ?? "Guest",
+            Identification = pass.Guest?.IdentificationNumber,
+            AlreadyInside = alreadyIn,
+            CanCheckIn = canCheckIn && !alreadyIn,
+            BlockReason = alreadyIn ? "Guest is already checked in." : blockReason,
+            PromptMessage = alreadyIn ? null : prompt,
+            SelectedBookingId = selectedBooking?.Id ?? pass.BookingId,
+            TodayBookings = bookings.Select(ToBookingRow).ToList()
+        };
+
+        ViewBag.LastGuestPass = pass;
+
+        if (!string.IsNullOrWhiteSpace(prompt))
+        {
+            TempData["Warning"] = prompt;
+        }
+        else if (!string.IsNullOrWhiteSpace(blockReason) && !alreadyIn)
+        {
+            TempData["Error"] = blockReason;
+        }
     }
 
     private async Task HandleGuestPassCheckInAsync(string passCode, string actionType, string staffUserId)
@@ -153,33 +319,47 @@ public class StaffController : Controller
             {
                 open.CheckedOutAt = DateTime.UtcNow;
                 open.CheckedOutByUserId = staffUserId;
+                open.Status = ClearanceStatus.CheckedOut;
                 await _db.SaveChangesAsync();
                 TempData["Success"] = $"Checked out guest {pass.Guest?.FullName}.";
             }
-        }
-        else
-        {
-            if (pass.CheckIns.Any(c => c.CheckedOutAt == null))
-            {
-                TempData["Error"] = "Guest is already checked in.";
-            }
-            else
-            {
-                _db.CheckInRecords.Add(new CheckInRecord
-                {
-                    VisitorPassId = pass.Id,
-                    CheckedInAt = DateTime.UtcNow,
-                    CheckedInByUserId = staffUserId
-                });
-                await _db.SaveChangesAsync();
-                TempData["Success"] = $"Checked in guest {pass.Guest?.FullName}.";
-            }
+
+            ViewBag.LastGuestPass = pass;
+            return;
         }
 
+        var bookings = pass.Booking is not null && pass.Booking.Status != BookingStatus.Cancelled
+            ? new List<Booking> { pass.Booking }
+            : [];
+        var (canCheckIn, _, blockReason, prompt) = EvaluateCheckInWindow(bookings, requireToday: true);
+        if (!canCheckIn)
+        {
+            TempData[string.IsNullOrWhiteSpace(prompt) ? "Error" : "Warning"] = prompt ?? blockReason ?? "Check-in not allowed.";
+            await BuildGuestPreviewAsync(passCode);
+            return;
+        }
+
+        if (pass.CheckIns.Any(c => c.CheckedOutAt == null))
+        {
+            TempData["Error"] = "Guest is already checked in.";
+            await BuildGuestPreviewAsync(passCode);
+            return;
+        }
+
+        _db.CheckInRecords.Add(new CheckInRecord
+        {
+            VisitorPassId = pass.Id,
+            CheckedInAt = DateTime.UtcNow,
+            CheckedInByUserId = staffUserId,
+            Status = ClearanceStatus.CheckedIn
+        });
+        await _db.SaveChangesAsync();
+        TempData["Success"] = $"Checked in guest {pass.Guest?.FullName} for {pass.Booking?.Facility?.Name ?? "facility"}.";
         ViewBag.LastGuestPass = pass;
+        ViewBag.ScanPreview = null;
     }
 
-    private async Task HandleMemberCheckInAsync(string memberId, string actionType, string staffUserId)
+    private async Task HandleMemberCheckInAsync(string memberId, string actionType, string staffUserId, int? bookingId)
     {
         var member = await _db.Users.FirstOrDefaultAsync(u => u.Id == memberId);
         if (member is null)
@@ -209,33 +389,159 @@ public class StaffController : Controller
             {
                 open.CheckedOutAt = DateTime.UtcNow;
                 open.CheckedOutByUserId = staffUserId;
+                open.Status = ClearanceStatus.CheckedOut;
                 await _db.SaveChangesAsync();
                 TempData["Success"] = $"Checked out member {member.FullName}.";
             }
+
+            ViewBag.LastMember = member;
+            ViewBag.LastMemberPlan = activeSub.MembershipPlan?.Name;
+            return;
         }
-        else
+
+        var todayBookings = await GetTodayBookingsForMemberAsync(memberId);
+        var (canCheckIn, selectedBooking, blockReason, prompt) = EvaluateCheckInWindow(todayBookings);
+
+        if (bookingId is int requestedId)
         {
-            var alreadyIn = await _db.MemberCheckIns.AnyAsync(c => c.MemberId == memberId && c.CheckedOutAt == null);
-            if (alreadyIn)
+            selectedBooking = todayBookings.FirstOrDefault(b => b.Id == requestedId) ?? selectedBooking;
+            if (selectedBooking is Booking chosen)
             {
-                TempData["Error"] = "Member is already checked in.";
-            }
-            else
-            {
-                _db.MemberCheckIns.Add(new MemberCheckIn
-                {
-                    MemberId = memberId,
-                    CheckedInAt = DateTime.UtcNow,
-                    CheckedInByUserId = staffUserId
-                });
-                await _db.SaveChangesAsync();
-                TempData["Success"] = $"Checked in member {member.FullName} ({activeSub.MembershipPlan?.Name}).";
+                (canCheckIn, selectedBooking, blockReason, prompt) = EvaluateCheckInWindow([chosen]);
             }
         }
 
+        if (!canCheckIn || selectedBooking is null)
+        {
+            TempData[string.IsNullOrWhiteSpace(prompt) ? "Error" : "Warning"] = prompt ?? blockReason ?? "Check-in not allowed.";
+            await BuildMemberPreviewAsync(memberId, MemberPassHelper.BuildPassCode(memberId));
+            return;
+        }
+
+        var alreadyIn = await _db.MemberCheckIns.AnyAsync(c => c.MemberId == memberId && c.CheckedOutAt == null);
+        if (alreadyIn)
+        {
+            TempData["Error"] = "Member is already checked in.";
+            await BuildMemberPreviewAsync(memberId, MemberPassHelper.BuildPassCode(memberId));
+            return;
+        }
+
+        _db.MemberCheckIns.Add(new MemberCheckIn
+        {
+            MemberId = memberId,
+            BookingId = selectedBooking.Id,
+            FacilityId = selectedBooking.FacilityId,
+            CheckedInAt = DateTime.UtcNow,
+            CheckedInByUserId = staffUserId,
+            Status = ClearanceStatus.CheckedIn
+        });
+        await _db.SaveChangesAsync();
+        TempData["Success"] =
+            $"Checked in member {member.FullName} for {selectedBooking.Facility?.Name ?? "facility"} ({activeSub.MembershipPlan?.Name}).";
+
         ViewBag.LastMember = member;
         ViewBag.LastMemberPlan = activeSub.MembershipPlan?.Name;
+        ViewBag.ScanPreview = null;
     }
+
+    private async Task<List<Booking>> GetTodayBookingsForMemberAsync(string memberId)
+    {
+        var today = DateTime.UtcNow.Date;
+        var tomorrow = today.AddDays(1);
+
+        return await _db.Bookings
+            .Include(b => b.Facility)
+            .Where(b => b.MemberId == memberId
+                        && b.StartUtc >= today
+                        && b.StartUtc < tomorrow
+                        && b.Status != BookingStatus.Cancelled
+                        && b.Status != BookingStatus.NoShow)
+            .OrderBy(b => b.StartUtc)
+            .ToListAsync();
+    }
+
+    private static (bool CanCheckIn, Booking? Booking, string? BlockReason, string? Prompt) EvaluateCheckInWindow(
+        IReadOnlyList<Booking> bookings,
+        bool requireToday = true)
+    {
+        var now = DateTime.UtcNow;
+        var today = now.Date;
+        var tomorrow = today.AddDays(1);
+
+        var todayBookings = bookings
+            .Where(b => !requireToday
+                        || (b.StartUtc >= today && b.StartUtc < tomorrow)
+                        || (b.EndUtc >= today && b.StartUtc < tomorrow))
+            .OrderBy(b => b.StartUtc)
+            .ToList();
+
+        if (todayBookings.Count == 0)
+        {
+            return (false, null, "No booking on the day — entry is not allowed.", null);
+        }
+
+        var confirmed = todayBookings.Where(b => b.Status == BookingStatus.Confirmed).ToList();
+        if (confirmed.Count == 0)
+        {
+            var pendingLike = todayBookings.FirstOrDefault(b =>
+                b.Status is BookingStatus.Pending or BookingStatus.AwaitingPayment);
+            if (pendingLike is not null)
+            {
+                return (false, pendingLike,
+                    $"Booking for {pendingLike.Facility?.Name ?? "facility"} is {pendingLike.Status} — confirm payment/approval before check-in.",
+                    null);
+            }
+
+            return (false, todayBookings.First(), "No confirmed booking on the day — entry is not allowed.", null);
+        }
+
+        foreach (var booking in confirmed)
+        {
+            var opensAt = booking.StartUtc.AddMinutes(-EarlyCheckInMinutes);
+            if (now >= opensAt && now <= booking.EndUtc)
+            {
+                return (true, booking, null, null);
+            }
+        }
+
+        var upcoming = confirmed.FirstOrDefault(b => now < b.StartUtc.AddMinutes(-EarlyCheckInMinutes));
+        if (upcoming is not null)
+        {
+            var opensLocal = upcoming.StartUtc.AddMinutes(-EarlyCheckInMinutes).ToLocalTime();
+            var startLocal = upcoming.StartUtc.ToLocalTime();
+            var facility = upcoming.Facility?.Name ?? "facility";
+            var prompt =
+                $"Too early to check in. {facility} starts at {startLocal:HH:mm}. Check-in opens 15 minutes before ({opensLocal:HH:mm}).";
+            return (false, upcoming, null, prompt);
+        }
+
+        return (false, confirmed.Last(), "Today's booking window has already ended.", null);
+    }
+
+    private static CheckInBookingRow ToBookingRow(Booking booking)
+    {
+        var now = DateTime.UtcNow;
+        var opensAt = booking.StartUtc.AddMinutes(-EarlyCheckInMinutes);
+        return new CheckInBookingRow
+        {
+            BookingId = booking.Id,
+            FacilityName = booking.Facility?.Name ?? "Facility",
+            StartUtc = booking.StartUtc,
+            EndUtc = booking.EndUtc,
+            Status = booking.Status,
+            CheckInOpensUtc = opensAt,
+            IsEligibleWindow = now >= opensAt && now <= booking.EndUtc && booking.Status == BookingStatus.Confirmed
+        };
+    }
+
+    public static string FormatClearanceStatus(ClearanceStatus status) => status switch
+    {
+        ClearanceStatus.CheckedIn => "Checked in",
+        ClearanceStatus.UsingFacility => "Using facility",
+        ClearanceStatus.CheckedOut => "Checked out",
+        ClearanceStatus.Denied => "Denied",
+        _ => status.ToString()
+    };
 
     private async Task PopulateCheckInViewAsync(string? tab)
     {
@@ -274,6 +580,8 @@ public class StaffController : Controller
 
         ViewBag.InsideMembers = await _db.MemberCheckIns
             .Include(c => c.Member)
+            .Include(c => c.Facility)
+            .Include(c => c.Booking)!.ThenInclude(b => b!.Facility)
             .Where(c => c.CheckedOutAt == null)
             .OrderByDescending(c => c.CheckedInAt)
             .Take(30)

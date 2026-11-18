@@ -183,6 +183,10 @@
     {
         <div class="container mt-3"><div class="alert alert-success flash">@success</div></div>
     }
+    @if (TempData["Warning"] is string warning)
+    {
+        <div class="container mt-3"><div class="alert alert-warning flash">@warning</div></div>
+    }
     @if (TempData["Error"] is string error)
     {
         <div class="container mt-3"><div class="alert alert-danger flash">@error</div></div>
