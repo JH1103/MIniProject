@@ -1496,10 +1496,55 @@ body.nav-open .nav-toggle__bar:nth-child(3) {
   display: none !important;
 }
 
+.clearance-desk .checkin-scanner,
+.clearance-desk .clearance-ledger {
+  min-height: 100%;
+}
+.clearance-ledger__table {
+  table-layout: fixed;
+  width: 100%;
+}
+.clearance-ledger__table th:nth-child(1),
+.clearance-ledger__table td:nth-child(1) {
+  width: 34%;
+}
+.clearance-ledger__table th:nth-child(2),
+.clearance-ledger__table td:nth-child(2) {
+  width: 24%;
+}
+.clearance-ledger__table th:nth-child(3),
+.clearance-ledger__table td:nth-child(3) {
+  width: 12%;
+}
+.clearance-ledger__table th:nth-child(4),
+.clearance-ledger__table td:nth-child(4) {
+  width: 16%;
+}
+.clearance-ledger__table th:last-child,
+.clearance-ledger__table td:last-child {
+  width: 7.5rem;
+}
+.clearance-ledger .pass-code {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.72rem;
+  vertical-align: bottom;
+}
+#scanPreviewPanel .alert {
+  margin-top: 0.75rem;
+}
+
 @media (max-width: 768px) {
   .hero__content { padding: 3.5rem 0 3rem; }
   .footer-grid { grid-template-columns: 1fr; }
   .section { padding: 3rem 0; }
+  .clearance-ledger__table th:last-child,
+  .clearance-ledger__table td:last-child {
+    width: 6.25rem;
+  }
   .admin-facility-card__main {
     grid-template-columns: 1fr;
   }

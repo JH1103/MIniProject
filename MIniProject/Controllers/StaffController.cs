@@ -140,49 +140,6 @@ public class StaffController : Controller
         return View();
     }
 
-    [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> UpdateClearanceStatus(int id, string kind, ClearanceStatus status, string? tab)
-    {
-        if (string.Equals(kind, "member", StringComparison.OrdinalIgnoreCase))
-        {
-            var row = await _db.MemberCheckIns.FirstOrDefaultAsync(c => c.Id == id && c.CheckedOutAt == null);
-            if (row is null)
-            {
-                TempData["Error"] = "Open member clearance record not found.";
-            }
-            else if (status is ClearanceStatus.CheckedIn or ClearanceStatus.UsingFacility)
-            {
-                row.Status = status;
-                await _db.SaveChangesAsync();
-                TempData["Success"] = $"Member status updated to {FormatClearanceStatus(status)}.";
-            }
-            else
-            {
-                TempData["Error"] = "Invalid clearance status.";
-            }
-        }
-        else
-        {
-            var row = await _db.CheckInRecords.FirstOrDefaultAsync(c => c.Id == id && c.CheckedOutAt == null);
-            if (row is null)
-            {
-                TempData["Error"] = "Open guest clearance record not found.";
-            }
-            else if (status is ClearanceStatus.CheckedIn or ClearanceStatus.UsingFacility)
-            {
-                row.Status = status;
-                await _db.SaveChangesAsync();
-                TempData["Success"] = $"Guest status updated to {FormatClearanceStatus(status)}.";
-            }
-            else
-            {
-                TempData["Error"] = "Invalid clearance status.";
-            }
-        }
-
-        return RedirectToAction(nameof(CheckIn), new { tab = tab ?? "clearance" });
-    }
-
     private async Task BuildMemberPreviewAsync(string memberId, string passCode)
     {
         var member = await _db.Users.FirstOrDefaultAsync(u => u.Id == memberId);
@@ -220,15 +177,7 @@ public class StaffController : Controller
 
         ViewBag.LastMember = member;
         ViewBag.LastMemberPlan = activeSub.MembershipPlan?.Name;
-
-        if (!string.IsNullOrWhiteSpace(prompt))
-        {
-            TempData["Warning"] = prompt;
-        }
-        else if (!string.IsNullOrWhiteSpace(blockReason) && !alreadyIn)
-        {
-            TempData["Error"] = blockReason;
-        }
+        // Preview panel already shows prompt/block reason — avoid duplicate flash banners.
     }
 
     private async Task BuildGuestPreviewAsync(string passCode)
@@ -276,15 +225,7 @@ public class StaffController : Controller
         };
 
         ViewBag.LastGuestPass = pass;
-
-        if (!string.IsNullOrWhiteSpace(prompt))
-        {
-            TempData["Warning"] = prompt;
-        }
-        else if (!string.IsNullOrWhiteSpace(blockReason) && !alreadyIn)
-        {
-            TempData["Error"] = blockReason;
-        }
+        // Preview panel already shows prompt/block reason — avoid duplicate flash banners.
     }
 
     private async Task HandleGuestPassCheckInAsync(string passCode, string actionType, string staffUserId)
@@ -351,7 +292,7 @@ public class StaffController : Controller
             VisitorPassId = pass.Id,
             CheckedInAt = DateTime.UtcNow,
             CheckedInByUserId = staffUserId,
-            Status = ClearanceStatus.CheckedIn
+            Status = ClearanceStatus.UsingFacility
         });
         await _db.SaveChangesAsync();
         TempData["Success"] = $"Checked in guest {pass.Guest?.FullName} for {pass.Booking?.Facility?.Name ?? "facility"}.";
@@ -433,7 +374,7 @@ public class StaffController : Controller
             FacilityId = selectedBooking.FacilityId,
             CheckedInAt = DateTime.UtcNow,
             CheckedInByUserId = staffUserId,
-            Status = ClearanceStatus.CheckedIn
+            Status = ClearanceStatus.UsingFacility
         });
         await _db.SaveChangesAsync();
         TempData["Success"] =
