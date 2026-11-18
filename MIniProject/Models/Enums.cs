@@ -64,6 +64,15 @@ public enum InventoryCondition
     Retired = 3
 }
 
+/// <summary>Front-desk clearance status for members/guests currently on site.</summary>
+public enum ClearanceStatus
+{
+    CheckedIn = 0,
+    UsingFacility = 1,
+    CheckedOut = 2,
+    Denied = 3
+}
+
 public static class AppRoles
 {
     public const string Member = "Member";

@@ -59,6 +59,8 @@ public class CheckInRecord
     public DateTime CheckedInAt { get; set; }
     public DateTime? CheckedOutAt { get; set; }
 
+    public ClearanceStatus Status { get; set; } = ClearanceStatus.CheckedIn;
+
     public string? CheckedInByUserId { get; set; }
     public string? CheckedOutByUserId { get; set; }
 }
@@ -72,8 +74,16 @@ public class MemberCheckIn
     public string MemberId { get; set; } = string.Empty;
     public ApplicationUser? Member { get; set; }
 
+    public int? BookingId { get; set; }
+    public Booking? Booking { get; set; }
+
+    public int? FacilityId { get; set; }
+    public Facility? Facility { get; set; }
+
     public DateTime CheckedInAt { get; set; }
     public DateTime? CheckedOutAt { get; set; }
+
+    public ClearanceStatus Status { get; set; } = ClearanceStatus.CheckedIn;
 
     public string? CheckedInByUserId { get; set; }
     public string? CheckedOutByUserId { get; set; }

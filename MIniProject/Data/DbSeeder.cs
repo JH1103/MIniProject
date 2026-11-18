@@ -19,6 +19,7 @@ public static class DbSeeder
         await db.Database.EnsureCreatedAsync();
         await EnsureSubscriptionSchemaAsync(db);
         await EnsureMemberCheckInTableAsync(db);
+        await EnsureClearanceSchemaAsync(db);
 
         foreach (var role in AppRoles.All)
         {
@@ -559,8 +560,11 @@ public static class DbSeeder
                 CREATE TABLE [MemberCheckIns] (
                     [Id] int NOT NULL IDENTITY,
                     [MemberId] nvarchar(450) NOT NULL,
+                    [BookingId] int NULL,
+                    [FacilityId] int NULL,
                     [CheckedInAt] datetime2 NOT NULL,
                     [CheckedOutAt] datetime2 NULL,
+                    [Status] int NOT NULL CONSTRAINT DF_MemberCheckIns_Status DEFAULT(0),
                     [CheckedInByUserId] nvarchar(max) NULL,
                     [CheckedOutByUserId] nvarchar(max) NULL,
                     CONSTRAINT [PK_MemberCheckIns] PRIMARY KEY ([Id]),
@@ -570,6 +574,41 @@ public static class DbSeeder
                 CREATE INDEX [IX_MemberCheckIns_MemberId_CheckedOutAt]
                     ON [MemberCheckIns] ([MemberId], [CheckedOutAt]);
             END
+            """);
+    }
+
+    /// <summary>
+    /// Adds booking/facility/status columns for clearance desk on existing installs.
+    /// </summary>
+    private static async Task EnsureClearanceSchemaAsync(ApplicationDbContext db)
+    {
+        if (!db.Database.IsSqlServer())
+        {
+            return;
+        }
+
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            IF COL_LENGTH('MemberCheckIns', 'BookingId') IS NULL
+                ALTER TABLE [MemberCheckIns] ADD [BookingId] int NULL;
+            """);
+
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            IF COL_LENGTH('MemberCheckIns', 'FacilityId') IS NULL
+                ALTER TABLE [MemberCheckIns] ADD [FacilityId] int NULL;
+            """);
+
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            IF COL_LENGTH('MemberCheckIns', 'Status') IS NULL
+                ALTER TABLE [MemberCheckIns] ADD [Status] int NOT NULL CONSTRAINT DF_MemberCheckIns_Status_Col DEFAULT(0);
+            """);
+
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            IF COL_LENGTH('CheckInRecords', 'Status') IS NULL
+                ALTER TABLE [CheckInRecords] ADD [Status] int NOT NULL CONSTRAINT DF_CheckInRecords_Status DEFAULT(0);
             """);
     }
 }
