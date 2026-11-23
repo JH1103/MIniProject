@@ -73,6 +73,14 @@ public enum ClearanceStatus
     Denied = 3
 }
 
+public enum EquipmentRentalStatus
+{
+    Active = 0,
+    Returned = 1,
+    Cancelled = 2,
+    Invalid = 3
+}
+
 public static class AppRoles
 {
     public const string Member = "Member";

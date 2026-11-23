@@ -20,6 +20,7 @@ public static class DbSeeder
         await EnsureSubscriptionSchemaAsync(db);
         await EnsureMemberCheckInTableAsync(db);
         await EnsureClearanceSchemaAsync(db);
+        await EnsureEquipmentRentalTableAsync(db);
 
         foreach (var role in AppRoles.All)
         {
@@ -609,6 +610,42 @@ public static class DbSeeder
             """
             IF COL_LENGTH('CheckInRecords', 'Status') IS NULL
                 ALTER TABLE [CheckInRecords] ADD [Status] int NOT NULL CONSTRAINT DF_CheckInRecords_Status DEFAULT(0);
+            """);
+    }
+
+    private static async Task EnsureEquipmentRentalTableAsync(ApplicationDbContext db)
+    {
+        if (!db.Database.IsSqlServer())
+        {
+            return;
+        }
+
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            IF OBJECT_ID(N'[EquipmentRentals]', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [EquipmentRentals] (
+                    [Id] int NOT NULL IDENTITY,
+                    [MemberId] nvarchar(450) NOT NULL,
+                    [InventoryItemId] int NOT NULL,
+                    [BookingId] int NULL,
+                    [Quantity] int NOT NULL,
+                    [StartUtc] datetime2 NOT NULL,
+                    [DueUtc] datetime2 NOT NULL,
+                    [ReturnedAt] datetime2 NULL,
+                    [Status] int NOT NULL,
+                    [Fee] decimal(18,2) NOT NULL,
+                    [Notes] nvarchar(500) NULL,
+                    [CreatedAt] datetime2 NOT NULL,
+                    CONSTRAINT [PK_EquipmentRentals] PRIMARY KEY ([Id]),
+                    CONSTRAINT [FK_EquipmentRentals_AspNetUsers_MemberId]
+                        FOREIGN KEY ([MemberId]) REFERENCES [AspNetUsers] ([Id]) ON DELETE CASCADE,
+                    CONSTRAINT [FK_EquipmentRentals_InventoryItems_InventoryItemId]
+                        FOREIGN KEY ([InventoryItemId]) REFERENCES [InventoryItems] ([Id]) ON DELETE NO ACTION
+                );
+                CREATE INDEX [IX_EquipmentRentals_MemberId_Status]
+                    ON [EquipmentRentals] ([MemberId], [Status]);
+            END
             """);
     }
 }

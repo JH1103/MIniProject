@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MIniProject.Data;
 using MIniProject.Models;
 using MIniProject.Services;
+using MIniProject.ViewModels;
 
 namespace MIniProject.Controllers;
 
@@ -12,11 +14,13 @@ public class AdminController : Controller
 {
     private readonly ApplicationDbContext _db;
     private readonly ReportService _reportService;
+    private readonly UserManager<ApplicationUser> _userManager;
 
-    public AdminController(ApplicationDbContext db, ReportService reportService)
+    public AdminController(ApplicationDbContext db, ReportService reportService, UserManager<ApplicationUser> userManager)
     {
         _db = db;
         _reportService = reportService;
+        _userManager = userManager;
     }
 
     public async Task<IActionResult> Index(string? tab)
@@ -125,16 +129,115 @@ public class AdminController : Controller
     }
 
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> AddInventory(int facilityId, string name, int quantity)
+    public async Task<IActionResult> DeleteFacility(int id)
     {
+        var facility = await _db.Facilities
+            .Include(f => f.Bookings)
+            .FirstOrDefaultAsync(f => f.Id == id);
+        if (facility is null)
+        {
+            return NotFound();
+        }
+
+        var hasFutureBookings = facility.Bookings.Any(b =>
+            b.Status != BookingStatus.Cancelled && b.EndUtc >= DateTime.UtcNow);
+
+        if (hasFutureBookings)
+        {
+            facility.IsActive = false;
+            facility.Status = FacilityStatus.Closed;
+            _db.AuditLogs.Add(new AuditLog
+            {
+                UserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
+                Action = "FacilitySoftDeleted",
+                Entity = $"Facility:{facility.Id}",
+                Details = $"{facility.Name} deactivated (has upcoming bookings)."
+            });
+            await _db.SaveChangesAsync();
+            TempData["Success"] = $"“{facility.Name}” has upcoming bookings, so it was deactivated instead of deleted.";
+            return RedirectToAction(nameof(Index), new { tab = "facilities" });
+        }
+
+        _db.Facilities.Remove(facility);
+        _db.AuditLogs.Add(new AuditLog
+        {
+            UserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
+            Action = "FacilityDeleted",
+            Entity = $"Facility:{id}",
+            Details = facility.Name
+        });
+        await _db.SaveChangesAsync();
+        TempData["Success"] = $"Facility “{facility.Name}” deleted.";
+        return RedirectToAction(nameof(Index), new { tab = "facilities" });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> AddInventory(int facilityId, string name, int quantity, InventoryCondition condition = InventoryCondition.Good, string? notes = null)
+    {
+        if (string.IsNullOrWhiteSpace(name) || quantity < 0)
+        {
+            TempData["Error"] = "Inventory name is required and quantity cannot be negative.";
+            return RedirectToAction(nameof(EditFacility), new { id = facilityId });
+        }
+
         _db.InventoryItems.Add(new InventoryItem
         {
             FacilityId = facilityId,
-            Name = name,
-            Quantity = quantity
+            Name = name.Trim(),
+            Quantity = quantity,
+            Condition = condition,
+            Notes = notes
         });
         await _db.SaveChangesAsync();
         TempData["Success"] = "Inventory item added.";
+        return RedirectToAction(nameof(EditFacility), new { id = facilityId });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateInventory(int id, string name, int quantity, InventoryCondition condition, string? notes)
+    {
+        var item = await _db.InventoryItems.FirstOrDefaultAsync(i => i.Id == id);
+        if (item is null)
+        {
+            return NotFound();
+        }
+
+        if (string.IsNullOrWhiteSpace(name) || quantity < 0)
+        {
+            TempData["Error"] = "Inventory name is required and quantity cannot be negative.";
+            return RedirectToAction(nameof(EditFacility), new { id = item.FacilityId });
+        }
+
+        item.Name = name.Trim();
+        item.Quantity = quantity;
+        item.Condition = condition;
+        item.Notes = notes;
+        await _db.SaveChangesAsync();
+        TempData["Success"] = $"Inventory “{item.Name}” updated.";
+        return RedirectToAction(nameof(EditFacility), new { id = item.FacilityId });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteInventory(int id)
+    {
+        var item = await _db.InventoryItems.FirstOrDefaultAsync(i => i.Id == id);
+        if (item is null)
+        {
+            return NotFound();
+        }
+
+        var facilityId = item.FacilityId;
+        var hasActiveRentals = await _db.EquipmentRentals.AnyAsync(r =>
+            r.InventoryItemId == id && r.Status == EquipmentRentalStatus.Active);
+        if (hasActiveRentals)
+        {
+            TempData["Error"] = "Cannot delete equipment while active rentals exist. Mark rentals returned or invalid first.";
+            return RedirectToAction(nameof(EditFacility), new { id = facilityId });
+        }
+
+        _db.InventoryItems.Remove(item);
+        await _db.SaveChangesAsync();
+        TempData["Success"] = $"Inventory “{item.Name}” deleted.";
         return RedirectToAction(nameof(EditFacility), new { id = facilityId });
     }
 
@@ -343,6 +446,262 @@ public class AdminController : Controller
             TempData["Success"] = $"Membership plan “{plan.Name}” deleted.";
         }
 
+        return RedirectToAction(nameof(Index), new { tab = "membership" });
+    }
+
+    [HttpGet]
+    public IActionResult CreateMember()
+    {
+        return View(new AdminMemberFormViewModel());
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateMember(AdminMemberFormViewModel model)
+    {
+        if (string.IsNullOrWhiteSpace(model.Password))
+        {
+            ModelState.AddModelError(nameof(model.Password), "Password is required for new members.");
+        }
+
+        if (!ModelState.IsValid)
+        {
+            return View(model);
+        }
+
+        var user = new ApplicationUser
+        {
+            UserName = model.Email.Trim(),
+            Email = model.Email.Trim(),
+            FullName = model.FullName.Trim(),
+            PhoneNumber = model.PhoneNumber,
+            IdentificationNumber = model.IdentificationNumber,
+            Address = model.Address,
+            MembershipStatus = model.MembershipStatus,
+            EmailConfirmed = true,
+            PdpaConsent = true,
+            PdpaConsentAt = DateTime.UtcNow
+        };
+
+        var result = await _userManager.CreateAsync(user, model.Password!);
+        if (!result.Succeeded)
+        {
+            foreach (var error in result.Errors)
+            {
+                ModelState.AddModelError(string.Empty, error.Description);
+            }
+
+            return View(model);
+        }
+
+        await _userManager.AddToRoleAsync(user, AppRoles.Member);
+        _db.AuditLogs.Add(new AuditLog
+        {
+            UserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
+            Action = "MemberCreated",
+            Entity = $"User:{user.Id}",
+            Details = user.Email
+        });
+        await _db.SaveChangesAsync();
+        TempData["Success"] = $"Member “{user.FullName}” created.";
+        return RedirectToAction(nameof(Index), new { tab = "membership" });
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> EditMember(string id)
+    {
+        var user = await _userManager.FindByIdAsync(id);
+        if (user is null)
+        {
+            return NotFound();
+        }
+
+        return View(new AdminMemberFormViewModel
+        {
+            Id = user.Id,
+            Email = user.Email ?? string.Empty,
+            FullName = user.FullName,
+            PhoneNumber = user.PhoneNumber,
+            IdentificationNumber = user.IdentificationNumber,
+            Address = user.Address,
+            MembershipStatus = user.MembershipStatus
+        });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditMember(AdminMemberFormViewModel model)
+    {
+        if (string.IsNullOrWhiteSpace(model.Id))
+        {
+            return NotFound();
+        }
+
+        if (!ModelState.IsValid)
+        {
+            return View(model);
+        }
+
+        var user = await _userManager.FindByIdAsync(model.Id);
+        if (user is null)
+        {
+            return NotFound();
+        }
+
+        user.FullName = model.FullName.Trim();
+        user.PhoneNumber = model.PhoneNumber;
+        user.IdentificationNumber = model.IdentificationNumber;
+        user.Address = model.Address;
+        user.MembershipStatus = model.MembershipStatus;
+
+        if (!string.Equals(user.Email, model.Email.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            var setEmail = await _userManager.SetEmailAsync(user, model.Email.Trim());
+            if (!setEmail.Succeeded)
+            {
+                foreach (var error in setEmail.Errors)
+                {
+                    ModelState.AddModelError(string.Empty, error.Description);
+                }
+
+                return View(model);
+            }
+
+            await _userManager.SetUserNameAsync(user, model.Email.Trim());
+        }
+
+        if (!string.IsNullOrWhiteSpace(model.Password))
+        {
+            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+            var reset = await _userManager.ResetPasswordAsync(user, token, model.Password);
+            if (!reset.Succeeded)
+            {
+                foreach (var error in reset.Errors)
+                {
+                    ModelState.AddModelError(string.Empty, error.Description);
+                }
+
+                return View(model);
+            }
+        }
+
+        await _userManager.UpdateAsync(user);
+        _db.AuditLogs.Add(new AuditLog
+        {
+            UserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
+            Action = "MemberUpdated",
+            Entity = $"User:{user.Id}",
+            Details = user.Email
+        });
+        await _db.SaveChangesAsync();
+        TempData["Success"] = $"Member “{user.FullName}” updated.";
+        return RedirectToAction(nameof(Index), new { tab = "membership" });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteMember(string id)
+    {
+        var user = await _userManager.FindByIdAsync(id);
+        if (user is null)
+        {
+            return NotFound();
+        }
+
+        if (await _userManager.IsInRoleAsync(user, AppRoles.Administrator) ||
+            await _userManager.IsInRoleAsync(user, AppRoles.Staff))
+        {
+            TempData["Error"] = "Staff and administrator accounts cannot be deleted here.";
+            return RedirectToAction(nameof(Index), new { tab = "membership" });
+        }
+
+        var openSubs = await _db.Subscriptions
+            .Where(s => s.UserId == id && s.Status == MembershipStatus.Active && s.CancelledAt == null && s.EndDate >= DateTime.UtcNow.Date)
+            .ToListAsync();
+        foreach (var sub in openSubs)
+        {
+            sub.CancelledAt = DateTime.UtcNow;
+            sub.AutoRenew = false;
+            sub.Status = MembershipStatus.Suspended;
+        }
+
+        user.MembershipStatus = MembershipStatus.Suspended;
+        await _userManager.UpdateAsync(user);
+
+        // Soft-delete: deactivate rather than hard-remove identity history.
+        user.LockoutEnabled = true;
+        user.LockoutEnd = DateTimeOffset.MaxValue;
+        await _userManager.UpdateAsync(user);
+
+        _db.AuditLogs.Add(new AuditLog
+        {
+            UserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
+            Action = "MemberDeactivated",
+            Entity = $"User:{user.Id}",
+            Details = user.Email
+        });
+        await _db.SaveChangesAsync();
+        TempData["Success"] = $"Member “{user.FullName}” deactivated and locked out.";
+        return RedirectToAction(nameof(Index), new { tab = "membership" });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> CancelSubscription(int id)
+    {
+        var sub = await _db.Subscriptions
+            .Include(s => s.MembershipPlan)
+            .Include(s => s.User)
+            .FirstOrDefaultAsync(s => s.Id == id);
+        if (sub is null)
+        {
+            return NotFound();
+        }
+
+        sub.CancelledAt = DateTime.UtcNow;
+        sub.AutoRenew = false;
+        if (sub.EndDate < DateTime.UtcNow.Date)
+        {
+            sub.Status = MembershipStatus.Expired;
+        }
+
+        _db.AuditLogs.Add(new AuditLog
+        {
+            UserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
+            Action = "SubscriptionCancelled",
+            Entity = $"Subscription:{sub.Id}",
+            Details = $"{sub.User?.Email} · {sub.MembershipPlan?.Name}"
+        });
+        await _db.SaveChangesAsync();
+        TempData["Success"] = "Subscription cancelled.";
+        return RedirectToAction(nameof(Index), new { tab = "membership" });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteSubscription(int id)
+    {
+        var sub = await _db.Subscriptions.FirstOrDefaultAsync(s => s.Id == id);
+        if (sub is null)
+        {
+            return NotFound();
+        }
+
+        // Only remove clearly inactive/invalid subscription rows.
+        var isInvalid = sub.Status != MembershipStatus.Active
+                        || sub.CancelledAt is not null
+                        || sub.EndDate < DateTime.UtcNow.Date;
+        if (!isInvalid)
+        {
+            TempData["Error"] = "Active subscriptions must be cancelled before delete.";
+            return RedirectToAction(nameof(Index), new { tab = "membership" });
+        }
+
+        _db.Subscriptions.Remove(sub);
+        _db.AuditLogs.Add(new AuditLog
+        {
+            UserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
+            Action = "SubscriptionDeleted",
+            Entity = $"Subscription:{id}",
+            Details = "Removed invalid/inactive subscription record"
+        });
+        await _db.SaveChangesAsync();
+        TempData["Success"] = "Invalid subscription record deleted.";
         return RedirectToAction(nameof(Index), new { tab = "membership" });
     }
 }

@@ -56,6 +56,10 @@
                         {
                             <li class="nav-item"><a class="nav-link" asp-controller="Membership" asp-action="Plans">Membership</a></li>
                         }
+                        @if (SignInManager.IsSignedIn(User) && (User.IsInRole(AppRoles.Member) || User.IsInRole(AppRoles.Staff) || User.IsInRole(AppRoles.Administrator)))
+                        {
+                            <li class="nav-item"><a class="nav-link" asp-controller="EquipmentRentals" asp-action="Index">Equipment rentals</a></li>
+                        }
                         <li class="nav-item"><a class="nav-link" asp-controller="Home" asp-action="Contact">Contact</a></li>
                         @if (SignInManager.IsSignedIn(User))
                         {
@@ -140,6 +144,10 @@
                 else
                 {
                     <li class="nav-item"><a class="nav-link" asp-controller="Membership" asp-action="Plans">Membership</a></li>
+                }
+                @if (SignInManager.IsSignedIn(User) && (User.IsInRole(AppRoles.Member) || User.IsInRole(AppRoles.Staff) || User.IsInRole(AppRoles.Administrator)))
+                {
+                    <li class="nav-item"><a class="nav-link" asp-controller="EquipmentRentals" asp-action="Index">Equipment rentals</a></li>
                 }
                 <li class="nav-item"><a class="nav-link" asp-controller="Home" asp-action="Contact">Contact</a></li>
                 @if (SignInManager.IsSignedIn(User))

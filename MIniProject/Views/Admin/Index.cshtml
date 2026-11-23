@@ -99,6 +99,11 @@
                                 }
                                 <a class="btn btn-sm btn-ghost" asp-action="EditFacility" asp-route-id="@facility.Id">Edit facility</a>
                                 <a class="btn btn-sm btn-primary" asp-action="EditFacility" asp-route-id="@facility.Id">+ Add equipment</a>
+                                <form asp-action="DeleteFacility" method="post" class="d-inline" onsubmit="return confirm('Delete this facility?');">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@facility.Id" />
+                                    <button class="btn btn-sm btn-ghost admin-danger" type="submit">Delete</button>
+                                </form>
                             </div>
                         </div>
 
@@ -130,9 +135,12 @@
             <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-3">
                 <div>
                     <h2 class="h4 mb-1">Manage membership</h2>
-                    <p class="muted mb-0">Create, update and delete membership plans for members. Administrator accounts do not hold a personal membership plan.</p>
+                    <p class="muted mb-0">CRUD for membership plans, members and subscriptions. Administrator accounts do not hold a personal membership plan.</p>
                 </div>
-                <a class="btn btn-primary btn-sm" asp-action="EditPlan">+ Create plan</a>
+                <div class="d-flex flex-wrap gap-2">
+                    <a class="btn btn-ghost btn-sm" asp-action="CreateMember">+ Create member</a>
+                    <a class="btn btn-primary btn-sm" asp-action="EditPlan">+ Create plan</a>
+                </div>
             </div>
 
             <div class="panel mb-3">
@@ -197,7 +205,7 @@
                 <p class="muted small">Active and recent subscriptions across the clubhouse.</p>
                 <div class="table-responsive">
                     <table class="table mb-0">
-                        <thead><tr><th>Member</th><th>Plan</th><th>Period</th><th>Status</th><th>Auto-renew</th></tr></thead>
+                        <thead><tr><th>Member</th><th>Plan</th><th>Period</th><th>Status</th><th>Auto-renew</th><th></th></tr></thead>
                         <tbody>
                         @foreach (var sub in subscriptions)
                         {
@@ -235,6 +243,24 @@
                                         <span class="badge-warn">Off</span>
                                     }
                                 </td>
+                                <td class="text-nowrap">
+                                    @if (sub.CancelledAt is null && sub.Status == MembershipStatus.Active && sub.EndDate >= DateTime.UtcNow.Date)
+                                    {
+                                        <form asp-action="CancelSubscription" method="post" class="d-inline" onsubmit="return confirm('Cancel this subscription?');">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="id" value="@sub.Id" />
+                                            <button class="btn btn-sm btn-ghost" type="submit">Cancel</button>
+                                        </form>
+                                    }
+                                    else
+                                    {
+                                        <form asp-action="DeleteSubscription" method="post" class="d-inline" onsubmit="return confirm('Delete this invalid/inactive subscription record?');">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="id" value="@sub.Id" />
+                                            <button class="btn btn-sm btn-ghost admin-danger" type="submit">Delete</button>
+                                        </form>
+                                    }
+                                </td>
                             </tr>
                         }
                         </tbody>
@@ -246,7 +272,7 @@
                 <h3 class="h5">Registered accounts</h3>
                 <div class="table-responsive">
                     <table class="table mb-0">
-                        <thead><tr><th>Name</th><th>Email</th><th>Membership status</th></tr></thead>
+                        <thead><tr><th>Name</th><th>Email</th><th>Membership status</th><th></th></tr></thead>
                         <tbody>
                         @foreach (var member in members)
                         {
@@ -254,6 +280,14 @@
                                 <td>@member.FullName</td>
                                 <td>@member.Email</td>
                                 <td><span class="badge-soft">@member.MembershipStatus</span></td>
+                                <td class="text-nowrap">
+                                    <a class="btn btn-sm btn-ghost" asp-action="EditMember" asp-route-id="@member.Id">Edit</a>
+                                    <form asp-action="DeleteMember" method="post" class="d-inline" onsubmit="return confirm('Deactivate this member account?');">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@member.Id" />
+                                        <button class="btn btn-sm btn-ghost admin-danger" type="submit">Deactivate</button>
+                                    </form>
+                                </td>
                             </tr>
                         }
                         </tbody>
@@ -267,7 +301,7 @@
                 <h3 class="h5">All bookings &amp; overrides</h3>
                 <div class="table-responsive">
                     <table class="table mb-0">
-                        <thead><tr><th>Facility</th><th>Member</th><th>When</th><th>Status</th><th>Amount</th></tr></thead>
+                        <thead><tr><th>Facility</th><th>Member</th><th>When</th><th>Status</th><th>Amount</th><th></th></tr></thead>
                         <tbody>
                         @foreach (var booking in bookings)
                         {
@@ -277,6 +311,17 @@
                                 <td>@booking.StartUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm")</td>
                                 <td>@booking.Status</td>
                                 <td>MYR @booking.Amount.ToString("N2")</td>
+                                <td class="text-nowrap">
+                                    <a class="btn btn-sm btn-ghost" asp-controller="Bookings" asp-action="Details" asp-route-id="@booking.Id">View</a>
+                                    @if (booking.Status == BookingStatus.Cancelled)
+                                    {
+                                        <form asp-controller="Bookings" asp-action="Delete" method="post" class="d-inline" onsubmit="return confirm('Hard-delete this cancelled booking?');">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="id" value="@booking.Id" />
+                                            <button class="btn btn-sm btn-ghost admin-danger" type="submit">Delete</button>
+                                        </form>
+                                    }
+                                </td>
                             </tr>
                         }
                         </tbody>
