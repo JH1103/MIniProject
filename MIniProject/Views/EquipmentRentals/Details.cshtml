@@ -1,0 +1,62 @@
+@model EquipmentRental
+@{
+    ViewData["Title"] = $"Rental #{Model.Id}";
+    var isStaff = User.IsInRole(AppRoles.Staff) || User.IsInRole(AppRoles.Administrator);
+    var canEdit = Model.Status is EquipmentRentalStatus.Active or EquipmentRentalStatus.Invalid;
+    var canDelete = Model.Status is EquipmentRentalStatus.Invalid or EquipmentRentalStatus.Cancelled
+                    || (isStaff && Model.Status == EquipmentRentalStatus.Returned);
+}
+
+<section class="section">
+    <div class="container" style="max-width:720px">
+        <div class="section-head">
+            <h2>Equipment rental #@Model.Id</h2>
+            <p class="muted mb-0">@Model.InventoryItem?.Name · @Model.Status</p>
+        </div>
+        <div class="panel">
+            <div class="row g-3">
+                <div class="col-md-6"><strong>Member</strong><div>@Model.Member?.FullName</div></div>
+                <div class="col-md-6"><strong>Facility</strong><div>@Model.InventoryItem?.Facility?.Name</div></div>
+                <div class="col-md-6"><strong>Equipment</strong><div>@Model.InventoryItem?.Name × @Model.Quantity</div></div>
+                <div class="col-md-6"><strong>Fee</strong><div>MYR @Model.Fee.ToString("N2")</div></div>
+                <div class="col-md-6"><strong>Start</strong><div>@Model.StartUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm")</div></div>
+                <div class="col-md-6"><strong>Due</strong><div>@Model.DueUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm")</div></div>
+                <div class="col-md-6"><strong>Returned</strong><div>@(Model.ReturnedAt?.ToLocalTime().ToString("dd MMM yyyy HH:mm") ?? "—")</div></div>
+                <div class="col-md-6"><strong>Booking</strong><div>@(Model.BookingId is null ? "—" : $"#{Model.BookingId}")</div></div>
+                <div class="col-12"><strong>Notes</strong><div>@(Model.Notes ?? "—")</div></div>
+            </div>
+
+            <div class="mt-4 d-flex flex-wrap gap-2">
+                @if (canEdit)
+                {
+                    <a class="btn btn-ghost" asp-action="Edit" asp-route-id="@Model.Id">Update rental</a>
+                }
+                @if (Model.Status == EquipmentRentalStatus.Active)
+                {
+                    <form asp-action="Return" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model.Id" />
+                        <button class="btn btn-primary" type="submit">Mark returned</button>
+                    </form>
+                }
+                @if (isStaff && Model.Status == EquipmentRentalStatus.Active)
+                {
+                    <form asp-action="MarkInvalid" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model.Id" />
+                        <button class="btn btn-ghost" type="submit">Mark invalid</button>
+                    </form>
+                }
+                @if (canDelete || Model.Status == EquipmentRentalStatus.Invalid)
+                {
+                    <form asp-action="Delete" method="post" onsubmit="return confirm('Delete this invalid/cancelled rental record?');">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model.Id" />
+                        <button class="btn btn-ghost admin-danger" type="submit">Delete record</button>
+                    </form>
+                }
+                <a class="btn btn-ghost" asp-action="Index">Back to list</a>
+            </div>
+        </div>
+    </div>
+</section>

@@ -31,13 +31,31 @@
                 {
                     <a class="btn btn-primary" asp-controller="Payments" asp-action="Pay" asp-route-id="@Model.Invoice.Id">Pay now</a>
                 }
-                @if (Model.Status is BookingStatus.Pending or BookingStatus.AwaitingPayment or BookingStatus.Confirmed)
+                @if (User.IsInRole(AppRoles.Member) && Model.Status is BookingStatus.Pending or BookingStatus.AwaitingPayment or BookingStatus.Confirmed)
                 {
+                    <a class="btn btn-ghost" asp-action="Edit" asp-route-id="@Model.Id">Update booking</a>
                     <form asp-action="Cancel" method="post">
                         @Html.AntiForgeryToken()
                         <input type="hidden" name="id" value="@Model.Id" />
                         <input type="hidden" name="reason" value="Cancelled by user" />
                         <button class="btn btn-ghost" type="submit">Cancel booking</button>
+                    </form>
+                }
+                else if (Model.Status is BookingStatus.Pending or BookingStatus.AwaitingPayment or BookingStatus.Confirmed)
+                {
+                    <form asp-action="Cancel" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model.Id" />
+                        <input type="hidden" name="reason" value="Cancelled by clubhouse" />
+                        <button class="btn btn-ghost" type="submit">Cancel booking</button>
+                    </form>
+                }
+                @if (User.IsInRole(AppRoles.Administrator) && Model.Status == BookingStatus.Cancelled)
+                {
+                    <form asp-action="Delete" method="post" onsubmit="return confirm('Hard-delete this cancelled booking?');">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model.Id" />
+                        <button class="btn btn-ghost admin-danger" type="submit">Delete booking</button>
                     </form>
                 }
                 <a class="btn btn-ghost" asp-controller="Member" asp-action="Dashboard">Back to dashboard</a>

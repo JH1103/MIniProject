@@ -241,6 +241,145 @@ public class BookingService
         return (true, null, booking);
     }
 
+    public async Task<(bool Ok, string? Error)> UpdateBookingAsync(
+        int bookingId,
+        string memberId,
+        DateTime startLocal,
+        DateTime endLocal,
+        IEnumerable<(string FullName, string? IdNumber, string? Phone)> guests,
+        string? notes = null,
+        CancellationToken ct = default)
+    {
+        await ReleaseExpiredHoldsAsync(ct);
+
+        var booking = await _db.Bookings
+            .Include(b => b.Facility)
+            .Include(b => b.Guests)
+            .Include(b => b.Invoice)
+            .FirstOrDefaultAsync(b => b.Id == bookingId, ct);
+
+        if (booking is null)
+        {
+            return (false, "Booking not found.");
+        }
+
+        if (booking.MemberId != memberId)
+        {
+            return (false, "You can only update your own bookings.");
+        }
+
+        if (booking.Status is BookingStatus.Cancelled or BookingStatus.Completed or BookingStatus.NoShow)
+        {
+            return (false, "This booking can no longer be updated.");
+        }
+
+        var facility = booking.Facility;
+        if (facility is null || !facility.IsActive || facility.Status != FacilityStatus.Available)
+        {
+            return (false, "Facility is currently unavailable.");
+        }
+
+        var subscription = await GetActiveSubscriptionAsync(memberId, ct);
+        if (subscription?.MembershipPlan is null)
+        {
+            return (false, "An active membership is required to update bookings.");
+        }
+
+        var startUtc = DateTime.SpecifyKind(startLocal, DateTimeKind.Local).ToUniversalTime();
+        var endUtc = DateTime.SpecifyKind(endLocal, DateTimeKind.Local).ToUniversalTime();
+        if (endUtc <= startUtc)
+        {
+            return (false, "End time must be after start time.");
+        }
+
+        if (startUtc < DateTime.UtcNow)
+        {
+            return (false, "Cannot move a booking into the past.");
+        }
+
+        var localDate = startLocal.Date;
+        var open = localDate.Add(facility.OpenTime);
+        var close = localDate.Add(facility.CloseTime);
+        if (startLocal < open || endLocal > close)
+        {
+            return (false, "Selected time is outside facility operating hours.");
+        }
+
+        var guestList = guests.Where(g => !string.IsNullOrWhiteSpace(g.FullName)).ToList();
+        if (guestList.Count > subscription.MembershipPlan.MaxGuestsPerBooking)
+        {
+            return (false, $"Your plan allows up to {subscription.MembershipPlan.MaxGuestsPerBooking} guests per booking.");
+        }
+
+        var blocked = await _db.FacilityBlockOuts.AnyAsync(b =>
+            b.FacilityId == facility.Id &&
+            b.StartUtc < endUtc &&
+            b.EndUtc > startUtc, ct);
+        if (blocked)
+        {
+            return (false, "Facility is blocked for maintenance or a private event.");
+        }
+
+        var conflict = await _db.Bookings.AnyAsync(b =>
+            b.Id != booking.Id &&
+            b.FacilityId == facility.Id &&
+            b.Status != BookingStatus.Cancelled &&
+            b.StartUtc < endUtc &&
+            b.EndUtc > startUtc, ct);
+        if (conflict)
+        {
+            return (false, "This time slot is no longer available.");
+        }
+
+        var hours = (decimal)(endUtc - startUtc).TotalHours;
+        var baseAmount = Math.Round(facility.HourlyRate * hours, 2);
+        var discount = Math.Round(baseAmount * (subscription.MembershipPlan.DiscountPercent / 100m), 2);
+        var amount = Math.Max(0, baseAmount - discount);
+
+        booking.StartUtc = startUtc;
+        booking.EndUtc = endUtc;
+        booking.Amount = amount;
+        booking.Notes = notes;
+
+        _db.BookingGuests.RemoveRange(booking.Guests);
+        foreach (var guestInput in guestList)
+        {
+            var guest = await _db.Guests.FirstOrDefaultAsync(g =>
+                g.HostMemberId == memberId &&
+                g.FullName == guestInput.FullName.Trim(), ct);
+            if (guest is null)
+            {
+                guest = new Guest
+                {
+                    HostMemberId = memberId,
+                    FullName = guestInput.FullName.Trim(),
+                    IdentificationNumber = guestInput.IdNumber,
+                    Phone = guestInput.Phone
+                };
+                _db.Guests.Add(guest);
+            }
+
+            booking.Guests.Add(new BookingGuest { Guest = guest });
+        }
+
+        if (booking.Invoice is not null && booking.Invoice.Status == InvoiceStatus.Unpaid)
+        {
+            booking.Invoice.Amount = amount;
+            booking.Invoice.Description = $"Booking for {facility.Name}";
+        }
+
+        _db.AuditLogs.Add(new AuditLog
+        {
+            UserId = memberId,
+            Action = "BookingUpdated",
+            Entity = $"Booking:{booking.Id}",
+            Details = $"{facility.Name} {startUtc:u} - {endUtc:u}"
+        });
+
+        await _db.SaveChangesAsync(ct);
+        return (true, null);
+    }
+
     public async Task<(bool Ok, string? Error)> ApproveBookingAsync(int bookingId, string staffUserId, CancellationToken ct = default)
     {
         var booking = await _db.Bookings.Include(b => b.Facility).FirstOrDefaultAsync(b => b.Id == bookingId, ct);

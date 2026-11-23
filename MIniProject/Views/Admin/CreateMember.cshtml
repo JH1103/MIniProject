@@ -1,0 +1,54 @@
+@model AdminMemberFormViewModel
+@{
+    ViewData["Title"] = "Create member";
+}
+
+<section class="section">
+    <div class="container" style="max-width:720px">
+        <div class="section-head">
+            <h2>Create member</h2>
+            <p class="muted mb-0">Register a new member account from admin governance.</p>
+        </div>
+        <form asp-action="CreateMember" method="post" class="panel">
+            @Html.AntiForgeryToken()
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label asp-for="FullName" class="form-label"></label>
+                    <input asp-for="FullName" class="form-control" />
+                    <span asp-validation-for="FullName" class="text-danger"></span>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="Email" class="form-label"></label>
+                    <input asp-for="Email" class="form-control" />
+                    <span asp-validation-for="Email" class="text-danger"></span>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="PhoneNumber" class="form-label"></label>
+                    <input asp-for="PhoneNumber" class="form-control" />
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="IdentificationNumber" class="form-label"></label>
+                    <input asp-for="IdentificationNumber" class="form-control" />
+                </div>
+                <div class="col-12">
+                    <label asp-for="Address" class="form-label"></label>
+                    <input asp-for="Address" class="form-control" />
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="Password" class="form-label"></label>
+                    <input asp-for="Password" class="form-control" />
+                    <span asp-validation-for="Password" class="text-danger"></span>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="MembershipStatus" class="form-label"></label>
+                    <select asp-for="MembershipStatus" class="form-select" asp-items="Html.GetEnumSelectList<MembershipStatus>()"></select>
+                </div>
+            </div>
+            <div class="mt-4 d-flex gap-2">
+                <button class="btn btn-primary" type="submit">Create member</button>
+                <a class="btn btn-ghost" asp-action="Index" asp-route-tab="membership">Back</a>
+            </div>
+        </form>
+    </div>
+</section>

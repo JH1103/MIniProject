@@ -1,0 +1,55 @@
+@model EquipmentRentalFormViewModel
+@{
+    ViewData["Title"] = "Create equipment rental";
+}
+
+<section class="section">
+    <div class="container" style="max-width:720px">
+        <div class="section-head">
+            <h2>Create equipment rental</h2>
+            <p class="muted mb-0">Members only · stock is reserved from facility inventory.</p>
+        </div>
+        <form asp-action="Create" method="post" class="panel">
+            @Html.AntiForgeryToken()
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <div class="row g-3">
+                <div class="col-12">
+                    <label asp-for="InventoryItemId" class="form-label"></label>
+                    <select asp-for="InventoryItemId" class="form-select" asp-items="Model.EquipmentOptions"></select>
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="Quantity" class="form-label"></label>
+                    <input asp-for="Quantity" class="form-control" />
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="StartDate" class="form-label"></label>
+                    <input asp-for="StartDate" type="date" class="form-control" />
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="StartTime" class="form-label"></label>
+                    <input asp-for="StartTime" class="form-control" placeholder="HH:mm" />
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="DueDate" class="form-label"></label>
+                    <input asp-for="DueDate" type="date" class="form-control" />
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="DueTime" class="form-label"></label>
+                    <input asp-for="DueTime" class="form-control" placeholder="HH:mm" />
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="BookingId" class="form-label">Linked booking</label>
+                    <select asp-for="BookingId" class="form-select" asp-items="Model.BookingOptions"></select>
+                </div>
+                <div class="col-12">
+                    <label asp-for="Notes" class="form-label"></label>
+                    <textarea asp-for="Notes" class="form-control" rows="3"></textarea>
+                </div>
+            </div>
+            <div class="mt-4 d-flex gap-2">
+                <button class="btn btn-primary" type="submit">Create rental</button>
+                <a class="btn btn-ghost" asp-action="Index">Back</a>
+            </div>
+        </form>
+    </div>
+</section>

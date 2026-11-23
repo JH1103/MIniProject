@@ -1,0 +1,86 @@
+@model List<EquipmentRental>
+@{
+    ViewData["Title"] = "Equipment rentals";
+    var isStaff = User.IsInRole(AppRoles.Staff) || User.IsInRole(AppRoles.Administrator);
+}
+
+<section class="section">
+    <div class="container">
+        <div class="section-head d-flex flex-wrap justify-content-between align-items-end gap-3">
+            <div>
+                <h2>Equipment rentals</h2>
+                <p class="muted mb-0">Rent facility equipment, track returns, and remove invalid records.</p>
+            </div>
+            @if (User.IsInRole(AppRoles.Member))
+            {
+                <a class="btn btn-primary" asp-action="Create">+ New rental</a>
+            }
+        </div>
+
+        <div class="panel">
+            @if (!Model.Any())
+            {
+                <p class="muted mb-0">No equipment rentals yet.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table mb-0">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                @if (isStaff) { <th>Member</th> }
+                                <th>Equipment</th>
+                                <th>Qty</th>
+                                <th>Window</th>
+                                <th>Fee</th>
+                                <th>Status</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var rental in Model)
+                        {
+                            <tr>
+                                <td>@rental.Id</td>
+                                @if (isStaff)
+                                {
+                                    <td>@rental.Member?.FullName</td>
+                                }
+                                <td>
+                                    @rental.InventoryItem?.Name
+                                    <div class="small muted">@rental.InventoryItem?.Facility?.Name</div>
+                                </td>
+                                <td>@rental.Quantity</td>
+                                <td>
+                                    @rental.StartUtc.ToLocalTime().ToString("dd MMM HH:mm")
+                                    –
+                                    @rental.DueUtc.ToLocalTime().ToString("dd MMM HH:mm")
+                                </td>
+                                <td>MYR @rental.Fee.ToString("N2")</td>
+                                <td>
+                                    @if (rental.Status == EquipmentRentalStatus.Active)
+                                    {
+                                        <span class="badge-soft">Active</span>
+                                    }
+                                    else if (rental.Status == EquipmentRentalStatus.Invalid)
+                                    {
+                                        <span class="badge-warn">Invalid</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge-warn">@rental.Status</span>
+                                    }
+                                </td>
+                                <td class="text-nowrap">
+                                    <a asp-action="Details" asp-route-id="@rental.Id">View</a>
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</section>

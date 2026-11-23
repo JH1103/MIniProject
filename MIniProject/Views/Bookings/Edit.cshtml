@@ -1,0 +1,61 @@
+@model BookingCreateViewModel
+@{
+    ViewData["Title"] = "Update booking";
+    var bookingId = (int)(ViewBag.BookingId ?? 0);
+}
+
+<section class="section">
+    <div class="container" style="max-width:820px">
+        <div class="section-head">
+            <h2>Update booking #@bookingId</h2>
+            <p class="muted mb-0">@Model.FacilityName · change date, time, guests or notes.</p>
+        </div>
+        <form asp-action="Edit" asp-route-id="@bookingId" method="post" class="panel">
+            @Html.AntiForgeryToken()
+            <input type="hidden" asp-for="FacilityId" />
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label asp-for="Date" class="form-label"></label>
+                    <input asp-for="Date" type="date" class="form-control" />
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="SlotStart" class="form-label">Start</label>
+                    <select asp-for="SlotStart" class="form-select">
+                        @foreach (var slot in Model.AvailableSlots.Where(s => s.Available))
+                        {
+                            <option value="@slot.Start">@slot.Label</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="SlotEnd" class="form-label">End</label>
+                    <select asp-for="SlotEnd" class="form-select">
+                        @foreach (var slot in Model.AvailableSlots.Where(s => s.Available))
+                        {
+                            <option value="@slot.End">@slot.End</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-12">
+                    <label asp-for="Notes" class="form-label"></label>
+                    <textarea asp-for="Notes" class="form-control" rows="3"></textarea>
+                </div>
+            </div>
+
+            <h3 class="h6 mt-4">Guests</h3>
+            @for (var i = 0; i < Model.Guests.Count; i++)
+            {
+                <div class="row g-2 mb-2">
+                    <div class="col-md-4"><input asp-for="Guests[i].FullName" class="form-control" placeholder="Full name" /></div>
+                    <div class="col-md-4"><input asp-for="Guests[i].IdentificationNumber" class="form-control" placeholder="ID number" /></div>
+                    <div class="col-md-4"><input asp-for="Guests[i].Phone" class="form-control" placeholder="Phone" /></div>
+                </div>
+            }
+
+            <div class="mt-4 d-flex gap-2">
+                <button class="btn btn-primary" type="submit">Save changes</button>
+                <a class="btn btn-ghost" asp-action="Details" asp-route-id="@bookingId">Cancel</a>
+            </div>
+        </form>
+    </div>
+</section>

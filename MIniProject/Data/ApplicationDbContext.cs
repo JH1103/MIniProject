@@ -14,6 +14,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Subscription> Subscriptions => Set<Subscription>();
     public DbSet<Facility> Facilities => Set<Facility>();
     public DbSet<InventoryItem> InventoryItems => Set<InventoryItem>();
+    public DbSet<EquipmentRental> EquipmentRentals => Set<EquipmentRental>();
     public DbSet<FacilityBlockOut> FacilityBlockOuts => Set<FacilityBlockOut>();
     public DbSet<Booking> Bookings => Set<Booking>();
     public DbSet<BookingGuest> BookingGuests => Set<BookingGuest>();
@@ -167,6 +168,27 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
         builder.Entity<MemberCheckIn>()
             .HasIndex(c => new { c.MemberId, c.CheckedOutAt });
+
+        builder.Entity<EquipmentRental>()
+            .HasOne(r => r.Member)
+            .WithMany()
+            .HasForeignKey(r => r.MemberId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<EquipmentRental>()
+            .HasOne(r => r.InventoryItem)
+            .WithMany()
+            .HasForeignKey(r => r.InventoryItemId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<EquipmentRental>()
+            .HasOne(r => r.Booking)
+            .WithMany()
+            .HasForeignKey(r => r.BookingId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        builder.Entity<EquipmentRental>()
+            .HasIndex(r => new { r.MemberId, r.Status });
 
         builder.Entity<SystemSetting>()
             .HasIndex(s => s.Key)
