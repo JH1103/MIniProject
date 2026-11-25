@@ -28,19 +28,19 @@
                 </div>
                 <div class="col-md-4">
                     <label asp-for="StartDate" class="form-label"></label>
-                    <input asp-for="StartDate" type="date" class="form-control schedule-field" @(locked ? "disabled" : null) />
+                    <input asp-for="StartDate" type="date" class="form-control schedule-field" readonly="@locked" />
                 </div>
                 <div class="col-md-4">
                     <label asp-for="StartTime" class="form-label"></label>
-                    <input asp-for="StartTime" class="form-control schedule-field" placeholder="HH:mm" @(locked ? "disabled" : null) />
+                    <input asp-for="StartTime" class="form-control schedule-field" placeholder="HH:mm" readonly="@locked" />
                 </div>
                 <div class="col-md-4">
                     <label asp-for="DueDate" class="form-label"></label>
-                    <input asp-for="DueDate" type="date" class="form-control schedule-field" @(locked ? "disabled" : null) />
+                    <input asp-for="DueDate" type="date" class="form-control schedule-field" readonly="@locked" />
                 </div>
                 <div class="col-md-4">
                     <label asp-for="DueTime" class="form-label"></label>
-                    <input asp-for="DueTime" class="form-control schedule-field" placeholder="HH:mm" @(locked ? "disabled" : null) />
+                    <input asp-for="DueTime" class="form-control schedule-field" placeholder="HH:mm" readonly="@locked" />
                 </div>
                 <div class="col-md-4">
                     <label asp-for="Quantity" class="form-label"></label>
@@ -75,7 +75,6 @@
     const notesHidden = document.getElementById('notesHidden');
     const hint = document.getElementById('linkedBookingHint');
     const scheduleFields = document.querySelectorAll('.schedule-field');
-    const form = document.getElementById('rentalCreateForm');
     const defaultGuidance = 'Select a linked booking to see which equipment you can rent for that facility, or leave unlinked to browse all club inventory.';
 
     const startDate = document.getElementById('StartDate');
@@ -89,8 +88,8 @@
     }
 
     function setScheduleLocked(locked) {
+        // Use readOnly (not disabled) so locked schedule values still post with the form.
         scheduleFields.forEach(el => {
-            el.disabled = locked;
             el.readOnly = locked;
         });
         hint.textContent = locked
@@ -158,11 +157,6 @@
             rebuildEquipment(null, equipmentSelect.value);
         }
     }
-
-    // Disabled fields are not posted — re-enable briefly on submit so locked values are sent.
-    form.addEventListener('submit', () => {
-        scheduleFields.forEach(el => { el.disabled = false; });
-    });
 
     bookingSelect.addEventListener('change', applyLinkedBooking);
     if (bookingSelect.value) {
