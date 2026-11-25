@@ -366,3 +366,6 @@ FodyWeavers.xsd
 *.db
 *.db-shm
 *.db-wal
+
+# Local email fallback (dev SMTP off)
+MIniProject/App_Data/emails/

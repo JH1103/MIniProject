@@ -8,11 +8,16 @@ public class PaymentService
 {
     private readonly ApplicationDbContext _db;
     private readonly BookingService _bookingService;
+    private readonly BookingNotificationService _notifications;
 
-    public PaymentService(ApplicationDbContext db, BookingService bookingService)
+    public PaymentService(
+        ApplicationDbContext db,
+        BookingService bookingService,
+        BookingNotificationService notifications)
     {
         _db = db;
         _bookingService = bookingService;
+        _notifications = notifications;
     }
 
     public async Task<(bool Ok, string? Error)> PayInvoiceAsync(int invoiceId, string userId, string method, CancellationToken ct = default)
@@ -100,6 +105,12 @@ public class PaymentService
         });
 
         await _db.SaveChangesAsync(ct);
+
+        if (invoice.Booking is not null && invoice.Booking.Status == BookingStatus.Confirmed)
+        {
+            await _notifications.SendConfirmationAsync(invoice.Booking.Id, ct);
+        }
+
         return (true, null);
     }
 
