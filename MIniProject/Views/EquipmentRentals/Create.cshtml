@@ -1,6 +1,10 @@
 @model EquipmentRentalFormViewModel
+@using System.Text.Json
 @{
     ViewData["Title"] = "Create equipment rental";
+    var catalogJson = JsonSerializer.Serialize(Model.EquipmentCatalog);
+    var schedulesJson = JsonSerializer.Serialize(Model.LinkedBookingSchedules);
+    var locked = Model.ScheduleLocked;
 }
 
 <section class="section">
@@ -9,41 +13,47 @@
             <h2>Create equipment rental</h2>
             <p class="muted mb-0">Members only · stock is reserved from facility inventory.</p>
         </div>
-        <form asp-action="Create" method="post" class="panel">
+        <form asp-action="Create" method="post" class="panel" id="rentalCreateForm">
             @Html.AntiForgeryToken()
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             <div class="row g-3">
                 <div class="col-12">
-                    <label asp-for="InventoryItemId" class="form-label"></label>
-                    <select asp-for="InventoryItemId" class="form-select" asp-items="Model.EquipmentOptions"></select>
+                    <label asp-for="BookingId" class="form-label">Linked booking</label>
+                    <select asp-for="BookingId" class="form-select" asp-items="Model.BookingOptions" id="linkedBookingSelect"></select>
+                    <div class="form-text" id="linkedBookingHint">
+                        @(locked
+                            ? "Start and due times are locked to this booking’s schedule."
+                            : "Link a booking to lock the rental window and limit equipment to that facility.")
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="StartDate" class="form-label"></label>
+                    <input asp-for="StartDate" type="date" class="form-control schedule-field" @(locked ? "disabled" : null) />
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="StartTime" class="form-label"></label>
+                    <input asp-for="StartTime" class="form-control schedule-field" placeholder="HH:mm" @(locked ? "disabled" : null) />
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="DueDate" class="form-label"></label>
+                    <input asp-for="DueDate" type="date" class="form-control schedule-field" @(locked ? "disabled" : null) />
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="DueTime" class="form-label"></label>
+                    <input asp-for="DueTime" class="form-control schedule-field" placeholder="HH:mm" @(locked ? "disabled" : null) />
                 </div>
                 <div class="col-md-4">
                     <label asp-for="Quantity" class="form-label"></label>
                     <input asp-for="Quantity" class="form-control" />
                 </div>
-                <div class="col-md-4">
-                    <label asp-for="StartDate" class="form-label"></label>
-                    <input asp-for="StartDate" type="date" class="form-control" />
-                </div>
-                <div class="col-md-4">
-                    <label asp-for="StartTime" class="form-label"></label>
-                    <input asp-for="StartTime" class="form-control" placeholder="HH:mm" />
-                </div>
-                <div class="col-md-4">
-                    <label asp-for="DueDate" class="form-label"></label>
-                    <input asp-for="DueDate" type="date" class="form-control" />
-                </div>
-                <div class="col-md-4">
-                    <label asp-for="DueTime" class="form-label"></label>
-                    <input asp-for="DueTime" class="form-control" placeholder="HH:mm" />
-                </div>
-                <div class="col-md-4">
-                    <label asp-for="BookingId" class="form-label">Linked booking</label>
-                    <select asp-for="BookingId" class="form-select" asp-items="Model.BookingOptions"></select>
+                <div class="col-12">
+                    <label asp-for="InventoryItemId" class="form-label"></label>
+                    <select asp-for="InventoryItemId" class="form-select" id="equipmentSelect" asp-items="Model.EquipmentOptions"></select>
                 </div>
                 <div class="col-12">
-                    <label asp-for="Notes" class="form-label"></label>
-                    <textarea asp-for="Notes" class="form-control" rows="3"></textarea>
+                    <label class="form-label">Equipment for this facility</label>
+                    <div class="form-control bg-light" id="equipmentGuidance" style="min-height:4.5rem;white-space:pre-wrap">@Model.EquipmentGuidance</div>
+                    <input type="hidden" asp-for="Notes" id="notesHidden" />
                 </div>
             </div>
             <div class="mt-4 d-flex gap-2">
@@ -53,3 +63,111 @@
         </form>
     </div>
 </section>
+
+@section Scripts {
+<script>
+(() => {
+    const catalog = @Html.Raw(catalogJson);
+    const schedules = @Html.Raw(schedulesJson);
+    const bookingSelect = document.getElementById('linkedBookingSelect');
+    const equipmentSelect = document.getElementById('equipmentSelect');
+    const guidance = document.getElementById('equipmentGuidance');
+    const notesHidden = document.getElementById('notesHidden');
+    const hint = document.getElementById('linkedBookingHint');
+    const scheduleFields = document.querySelectorAll('.schedule-field');
+    const form = document.getElementById('rentalCreateForm');
+    const defaultGuidance = 'Select a linked booking to see which equipment you can rent for that facility, or leave unlinked to browse all club inventory.';
+
+    const startDate = document.getElementById('StartDate');
+    const startTime = document.getElementById('StartTime');
+    const dueDate = document.getElementById('DueDate');
+    const dueTime = document.getElementById('DueTime');
+
+    function findSchedule(id) {
+        if (!id) return null;
+        return schedules.find(s => String(s.Id) === String(id)) || null;
+    }
+
+    function setScheduleLocked(locked) {
+        scheduleFields.forEach(el => {
+            el.disabled = locked;
+            el.readOnly = locked;
+        });
+        hint.textContent = locked
+            ? 'Start and due times are locked to this booking’s schedule.'
+            : 'Link a booking to lock the rental window and limit equipment to that facility.';
+    }
+
+    function buildGuidance(schedule) {
+        if (!schedule) return defaultGuidance;
+        const names = schedule.EquipmentNames || [];
+        if (!names.length) {
+            return `No equipment inventory is listed for ${schedule.FacilityName}. You can still rent from other facilities by unlinking this booking.`;
+        }
+        return `For ${schedule.FacilityName}, you can rent: ${names.join(', ')}. Only inventory tied to this facility is shown below.`;
+    }
+
+    function rebuildEquipment(facilityId, preferId) {
+        const current = preferId || equipmentSelect.value;
+        const items = facilityId
+            ? catalog.filter(i => i.FacilityId === facilityId)
+            : catalog.slice();
+
+        equipmentSelect.innerHTML = '';
+        if (!items.length) {
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = facilityId
+                ? '(No rentable equipment for this facility)'
+                : '(No equipment available)';
+            equipmentSelect.appendChild(opt);
+            return;
+        }
+
+        items.forEach(item => {
+            const opt = document.createElement('option');
+            opt.value = String(item.Id);
+            opt.textContent = facilityId
+                ? `${item.Name} (qty ${item.Quantity})`
+                : `${item.FacilityName} · ${item.Name} (qty ${item.Quantity})`;
+            if (String(item.Id) === String(current)) opt.selected = true;
+            equipmentSelect.appendChild(opt);
+        });
+
+        if (![...equipmentSelect.options].some(o => o.selected) && equipmentSelect.options.length) {
+            equipmentSelect.options[0].selected = true;
+        }
+    }
+
+    function applyLinkedBooking() {
+        const schedule = findSchedule(bookingSelect.value);
+        if (schedule) {
+            startDate.value = schedule.StartDate;
+            startTime.value = schedule.StartTime;
+            dueDate.value = schedule.DueDate;
+            dueTime.value = schedule.DueTime;
+            setScheduleLocked(true);
+            const text = buildGuidance(schedule);
+            guidance.textContent = text;
+            notesHidden.value = text;
+            rebuildEquipment(schedule.FacilityId);
+        } else {
+            setScheduleLocked(false);
+            guidance.textContent = defaultGuidance;
+            notesHidden.value = '';
+            rebuildEquipment(null, equipmentSelect.value);
+        }
+    }
+
+    // Disabled fields are not posted — re-enable briefly on submit so locked values are sent.
+    form.addEventListener('submit', () => {
+        scheduleFields.forEach(el => { el.disabled = false; });
+    });
+
+    bookingSelect.addEventListener('change', applyLinkedBooking);
+    if (bookingSelect.value) {
+        applyLinkedBooking();
+    }
+})();
+</script>
+}
