@@ -20,7 +20,7 @@ public class PaymentService
         _notifications = notifications;
     }
 
-    public async Task<(bool Ok, string? Error)> PayInvoiceAsync(int invoiceId, string userId, string method, CancellationToken ct = default)
+    public async Task<(bool Ok, string? Error, string? EmailWarning)> PayInvoiceAsync(int invoiceId, string userId, string method, CancellationToken ct = default)
     {
         var invoice = await _db.Invoices
             .Include(i => i.Booking)
@@ -28,12 +28,12 @@ public class PaymentService
 
         if (invoice is null)
         {
-            return (false, "Invoice not found.");
+            return (false, "Invoice not found.", null);
         }
 
         if (invoice.Status != InvoiceStatus.Unpaid && invoice.Status != InvoiceStatus.Overdue)
         {
-            return (false, "Invoice is not payable.");
+            return (false, "Invoice is not payable.", null);
         }
 
         if (invoice.Booking is not null &&
@@ -46,7 +46,7 @@ public class PaymentService
             invoice.Status = InvoiceStatus.Cancelled;
             await _bookingService.CancelLinkedEquipmentRentalsAsync([invoice.Booking.Id], ct);
             await _db.SaveChangesAsync(ct);
-            return (false, "Payment hold expired. The booking was released.");
+            return (false, "Payment hold expired. The booking was released.", null);
         }
 
         var payment = new PaymentTransaction
@@ -106,12 +106,23 @@ public class PaymentService
 
         await _db.SaveChangesAsync(ct);
 
+        string? emailWarning = null;
         if (invoice.Booking is not null && invoice.Booking.Status == BookingStatus.Confirmed)
         {
-            await _notifications.SendConfirmationAsync(invoice.Booking.Id, ct);
+            var email = await _notifications.SendConfirmationAsync(invoice.Booking.Id, ct);
+            if (!email.Success)
+            {
+                emailWarning = email.ErrorMessage
+                    ?? "Payment succeeded, but the booking confirmation email could not be sent.";
+            }
+            else if (email.Mode == EmailDeliveryMode.FileFallback)
+            {
+                emailWarning =
+                    "Payment succeeded. SMTP is not configured, so the booking confirmation was saved under App_Data/emails (Development fallback).";
+            }
         }
 
-        return (true, null);
+        return (true, null, emailWarning);
     }
 
     public decimal CalculateRefundAmount(Booking booking, IEnumerable<SystemSetting> settings, bool cancelledByClubhouse)

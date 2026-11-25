@@ -83,8 +83,22 @@ public class StaffController : Controller
             return Challenge();
         }
 
-        var (ok, error) = await _bookingService.ApproveBookingAsync(id, user.Id);
-        TempData[ok ? "Success" : "Error"] = ok ? "Booking approved. Member can now pay." : error;
+        var (ok, error, emailWarning) = await _bookingService.ApproveBookingAsync(id, user.Id);
+        if (!ok)
+        {
+            TempData["Error"] = error;
+            return RedirectToAction(nameof(Index));
+        }
+
+        var booking = await _db.Bookings.AsNoTracking().FirstOrDefaultAsync(b => b.Id == id);
+        TempData["Success"] = booking?.Status == BookingStatus.Confirmed
+            ? "Booking approved and confirmed. A confirmation email was sent to the member."
+            : "Booking approved. Member can now pay — they will receive a confirmation email after payment.";
+        if (!string.IsNullOrWhiteSpace(emailWarning))
+        {
+            TempData["Warning"] = emailWarning;
+        }
+
         return RedirectToAction(nameof(Index));
     }
 

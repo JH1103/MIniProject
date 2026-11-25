@@ -99,7 +99,7 @@ public class BookingService
             .FirstOrDefaultAsync(ct);
     }
 
-    public async Task<(bool Ok, string? Error, Booking? Booking)> CreateBookingAsync(
+    public async Task<(bool Ok, string? Error, Booking? Booking, string? EmailWarning)> CreateBookingAsync(
         string memberId,
         int facilityId,
         DateTime startLocal,
@@ -115,18 +115,18 @@ public class BookingService
         var facility = await _db.Facilities.FirstOrDefaultAsync(f => f.Id == facilityId && f.IsActive, ct);
         if (facility is null)
         {
-            return (false, "Facility not found.", null);
+            return (false, "Facility not found.", null, null);
         }
 
         if (facility.Status != FacilityStatus.Available)
         {
-            return (false, "Facility is currently unavailable.", null);
+            return (false, "Facility is currently unavailable.", null, null);
         }
 
         var subscription = await GetActiveSubscriptionAsync(memberId, ct);
         if (subscription?.MembershipPlan is null)
         {
-            return (false, "An active membership is required to book facilities.", null);
+            return (false, "An active membership is required to book facilities.", null, null);
         }
 
         var startUtc = DateTime.SpecifyKind(startLocal, DateTimeKind.Local).ToUniversalTime();
@@ -134,18 +134,18 @@ public class BookingService
 
         if (endUtc <= startUtc)
         {
-            return (false, "End time must be after start time.", null);
+            return (false, "End time must be after start time.", null, null);
         }
 
         if (startUtc < DateTime.UtcNow)
         {
-            return (false, "Cannot book a slot in the past.", null);
+            return (false, "Cannot book a slot in the past.", null, null);
         }
 
         var maxAdvance = DateTime.UtcNow.Date.AddDays(subscription.MembershipPlan.AdvanceBookingDays);
         if (startUtc.Date > maxAdvance)
         {
-            return (false, $"Your plan allows bookings up to {subscription.MembershipPlan.AdvanceBookingDays} days in advance.", null);
+            return (false, $"Your plan allows bookings up to {subscription.MembershipPlan.AdvanceBookingDays} days in advance.", null, null);
         }
 
         var localDate = startLocal.Date;
@@ -153,13 +153,13 @@ public class BookingService
         var close = localDate.Add(facility.CloseTime);
         if (startLocal < open || endLocal > close)
         {
-            return (false, "Selected time is outside facility operating hours.", null);
+            return (false, "Selected time is outside facility operating hours.", null, null);
         }
 
         var guestList = guests.Where(g => !string.IsNullOrWhiteSpace(g.FullName)).ToList();
         if (guestList.Count > subscription.MembershipPlan.MaxGuestsPerBooking)
         {
-            return (false, $"Your plan allows up to {subscription.MembershipPlan.MaxGuestsPerBooking} guests per booking.", null);
+            return (false, $"Your plan allows up to {subscription.MembershipPlan.MaxGuestsPerBooking} guests per booking.", null, null);
         }
 
         await using var tx = await _db.Database.BeginTransactionAsync(ct);
@@ -171,7 +171,7 @@ public class BookingService
 
         if (blocked)
         {
-            return (false, "Facility is blocked for maintenance or a private event.", null);
+            return (false, "Facility is blocked for maintenance or a private event.", null, null);
         }
 
         var conflict = await _db.Bookings.AnyAsync(b =>
@@ -182,7 +182,7 @@ public class BookingService
 
         if (conflict)
         {
-            return (false, "This time slot is no longer available.", null);
+            return (false, "This time slot is no longer available.", null, null);
         }
 
         var hours = (decimal)(endUtc - startUtc).TotalHours;
@@ -324,12 +324,23 @@ public class BookingService
         await _db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
+        string? emailWarning = null;
         if (booking.Status == BookingStatus.Confirmed)
         {
-            await _notifications.SendConfirmationAsync(booking.Id, ct);
+            var email = await _notifications.SendConfirmationAsync(booking.Id, ct);
+            if (!email.Success)
+            {
+                emailWarning = email.ErrorMessage
+                    ?? "Booking is confirmed, but the confirmation email could not be sent.";
+            }
+            else if (email.Mode == EmailDeliveryMode.FileFallback)
+            {
+                emailWarning =
+                    "Booking is confirmed. SMTP is not configured, so the confirmation was saved under App_Data/emails (Development fallback).";
+            }
         }
 
-        return (true, null, booking);
+        return (true, null, booking, emailWarning);
     }
 
     public async Task<(bool Ok, string? Error)> UpdateBookingAsync(
@@ -486,17 +497,17 @@ public class BookingService
         return (true, null);
     }
 
-    public async Task<(bool Ok, string? Error)> ApproveBookingAsync(int bookingId, string staffUserId, CancellationToken ct = default)
+    public async Task<(bool Ok, string? Error, string? EmailWarning)> ApproveBookingAsync(int bookingId, string staffUserId, CancellationToken ct = default)
     {
         var booking = await _db.Bookings.Include(b => b.Facility).FirstOrDefaultAsync(b => b.Id == bookingId, ct);
         if (booking is null)
         {
-            return (false, "Booking not found.");
+            return (false, "Booking not found.", null);
         }
 
         if (booking.Status != BookingStatus.Pending)
         {
-            return (false, "Only pending bookings can be approved.");
+            return (false, "Only pending bookings can be approved.", null);
         }
 
         booking.Status = BookingStatus.AwaitingPayment;
@@ -527,12 +538,23 @@ public class BookingService
 
         await _db.SaveChangesAsync(ct);
 
+        string? emailWarning = null;
         if (booking.Status == BookingStatus.Confirmed)
         {
-            await _notifications.SendConfirmationAsync(booking.Id, ct);
+            var email = await _notifications.SendConfirmationAsync(booking.Id, ct);
+            if (!email.Success)
+            {
+                emailWarning = email.ErrorMessage
+                    ?? "Booking is confirmed, but the confirmation email could not be sent.";
+            }
+            else if (email.Mode == EmailDeliveryMode.FileFallback)
+            {
+                emailWarning =
+                    "Booking is confirmed. SMTP is not configured, so the confirmation was saved under App_Data/emails (Development fallback).";
+            }
         }
 
-        return (true, null);
+        return (true, null, emailWarning);
     }
 
     public List<(DateTime Start, DateTime End, bool Available, string State)> GetDaySlots(Facility facility, DateTime day, IEnumerable<Booking> bookings, IEnumerable<FacilityBlockOut> blockOuts)

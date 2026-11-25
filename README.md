@@ -97,7 +97,35 @@ dotnet user-secrets set "Email:FromName" "Kota Permai Clubhouse"
 
 Or set the `Email__Smtp__*` environment variables above before `dotnet run`.
 
-Forgot password validates that the email belongs to a **registered member**; unknown addresses show an error (no silent success). It sends a 6-digit OTP and a reset link when delivery succeeds. Booking confirmation emails are attempted whenever a booking reaches **Confirmed** (free instant confirm, paid after payment, or zero-amount after staff approval); SMTP failures are logged.
+Forgot password validates that the email belongs to a **registered member**; unknown addresses show an error (no silent success). It sends a 6-digit OTP and a reset link when delivery succeeds.
+
+### When booking confirmation email sends
+
+Confirmation mail is sent only when a booking reaches **Confirmed** (same SMTP path as password reset):
+
+| Path | When email sends |
+|------|------------------|
+| Instant confirm + amount RM 0 | Immediately on create |
+| Instant confirm + paid amount | After successful card/e-wallet payment |
+| Approval-required + amount RM 0 | After staff approve |
+| Approval-required + paid amount | After staff approve **and** member pays |
+
+Holds (`AwaitingPayment` / `Pending`) do **not** send a “confirmed” email. SMTP failures after confirm/pay are shown as a warning on the page (payment/booking still succeeds) and are logged with host/from/to detail.
+
+### Gmail user secrets
+
+For Gmail, `Email:FromAddress` must be the authenticated Gmail address (or a verified Send As alias)—not `noreply@kotapermai.local`. Example:
+
+```bash
+dotnet user-secrets set "Email:Smtp:Host" "smtp.gmail.com"
+dotnet user-secrets set "Email:Smtp:Port" "587"
+dotnet user-secrets set "Email:Smtp:EnableSsl" "true"
+dotnet user-secrets set "Email:Smtp:UserName" "you@gmail.com"
+dotnet user-secrets set "Email:Smtp:Password" "your-app-password"
+dotnet user-secrets set "Email:FromAddress" "you@gmail.com"
+```
+
+`Email:FromEmail` is accepted as an alias for `FromAddress`. If `FromAddress` is still the shipped `.local` default and `Smtp:UserName` looks like an email, the app uses the username as From (and logs a warning). Startup logs whether Email options bound from configuration/user-secrets (host set, from address, credentials present—never the password).
 
 ## Reference
 

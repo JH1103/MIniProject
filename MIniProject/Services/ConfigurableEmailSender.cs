@@ -13,16 +13,16 @@ namespace MIniProject.Services;
 /// </summary>
 public class ConfigurableEmailSender : IAppEmailSender
 {
-    private readonly EmailOptions _options;
+    private readonly IOptionsMonitor<EmailOptions> _options;
     private readonly IWebHostEnvironment _env;
     private readonly ILogger<ConfigurableEmailSender> _logger;
 
     public ConfigurableEmailSender(
-        IOptions<EmailOptions> options,
+        IOptionsMonitor<EmailOptions> options,
         IWebHostEnvironment env,
         ILogger<ConfigurableEmailSender> logger)
     {
-        _options = options.Value;
+        _options = options;
         _env = env;
         _logger = logger;
     }
@@ -38,35 +38,76 @@ public class ConfigurableEmailSender : IAppEmailSender
             return EmailSendResult.Failed("Recipient email is required.");
         }
 
-        if (!_options.Enabled)
+        var options = _options.CurrentValue;
+
+        if (!options.Enabled)
         {
             _logger.LogWarning("Email send blocked: Email:Enabled is false.");
             return EmailSendResult.Failed(
                 "Email delivery is disabled. Set Email:Enabled to true and configure SMTP.");
         }
 
-        if (string.IsNullOrWhiteSpace(_options.FromAddress))
+        var fromAddress = options.ResolveFromAddress();
+        if (string.IsNullOrWhiteSpace(fromAddress))
         {
-            return EmailSendResult.Failed("Email:FromAddress is not configured.");
+            _logger.LogError("Email send failed: Email:FromAddress is empty after resolving options.");
+            return EmailSendResult.Failed(
+                "Email:FromAddress is not configured. Set Email:FromAddress (or Email:FromEmail) via user secrets.");
         }
 
-        var smtpConfigured = !string.IsNullOrWhiteSpace(_options.Smtp.Host);
+        if (string.Equals(fromAddress, EmailOptions.DefaultLocalFromAddress, StringComparison.OrdinalIgnoreCase) &&
+            options.IsSmtpConfigured)
+        {
+            _logger.LogError(
+                "Email send blocked: FromAddress is still '{From}' while SMTP Host is set. " +
+                "Gmail and most providers reject .local senders. Set Email:FromAddress to your SMTP mailbox " +
+                "(usually the same as Email:Smtp:UserName).",
+                fromAddress);
+            return EmailSendResult.Failed(
+                "Email:FromAddress must be a real mailbox allowed by your SMTP provider " +
+                "(for Gmail, use the same address as Email:Smtp:UserName).");
+        }
+
+        if (!string.Equals(fromAddress, options.FromAddress?.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning(
+                "Using resolved FromAddress {Resolved} (configured FromAddress was {Configured}). " +
+                "Prefer setting Email:FromAddress explicitly in user secrets.",
+                fromAddress,
+                options.FromAddress);
+        }
+
+        var smtpConfigured = options.IsSmtpConfigured;
 
         if (smtpConfigured)
         {
             try
             {
-                await SendSmtpAsync(toEmail, subject, plainTextBody, ct);
-                _logger.LogInformation("Email sent via SMTP to {To} subject {Subject}", toEmail, subject);
+                await SendSmtpAsync(options, fromAddress, toEmail, subject, plainTextBody, ct);
+                _logger.LogInformation(
+                    "Email sent via SMTP host {Host}:{Port} from {From} to {To} subject {Subject}",
+                    options.Smtp.Host,
+                    options.Smtp.Port,
+                    fromAddress,
+                    toEmail,
+                    subject);
                 return EmailSendResult.SentViaSmtp();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "SMTP send failed for {To} subject {Subject}", toEmail, subject);
+                _logger.LogError(
+                    ex,
+                    "SMTP send failed via {Host}:{Port} from {From} to {To} subject {Subject}: {Message}",
+                    options.Smtp.Host,
+                    options.Smtp.Port,
+                    fromAddress,
+                    toEmail,
+                    subject,
+                    ex.Message);
                 string? diagPath = null;
                 try
                 {
-                    diagPath = await WriteFallbackAsync(toEmail, subject, plainTextBody, "smtp-error", ct);
+                    diagPath = await WriteFallbackAsync(options, fromAddress, toEmail, subject, plainTextBody, "smtp-error", ct);
                 }
                 catch (Exception writeEx)
                 {
@@ -74,14 +115,14 @@ public class ConfigurableEmailSender : IAppEmailSender
                 }
 
                 return EmailSendResult.Failed(
-                    "We could not send the email via SMTP. Check Email:Smtp settings (Host, Port, credentials) and try again.",
+                    "We could not send the email via SMTP. Check Email:Smtp settings (Host, Port, FromAddress, credentials) and try again.",
                     diagPath);
             }
         }
 
-        if (_options.AllowFileFallback)
+        if (options.AllowFileFallback)
         {
-            var path = await WriteFallbackAsync(toEmail, subject, plainTextBody, "no-smtp", ct);
+            var path = await WriteFallbackAsync(options, fromAddress, toEmail, subject, plainTextBody, "no-smtp", ct);
             _logger.LogWarning(
                 "Email:Smtp:Host is empty — wrote fallback file for {To} at {Path}. Configure SMTP for real delivery.",
                 toEmail,
@@ -96,11 +137,17 @@ public class ConfigurableEmailSender : IAppEmailSender
             "Email delivery is not configured. Set Email:Smtp:Host (and credentials via user secrets or environment variables).");
     }
 
-    private async Task SendSmtpAsync(string toEmail, string subject, string plainTextBody, CancellationToken ct)
+    private async Task SendSmtpAsync(
+        EmailOptions options,
+        string fromAddress,
+        string toEmail,
+        string subject,
+        string plainTextBody,
+        CancellationToken ct)
     {
         using var message = new MailMessage
         {
-            From = new MailAddress(_options.FromAddress, _options.FromName),
+            From = new MailAddress(fromAddress, options.FromName),
             Subject = subject,
             Body = plainTextBody,
             BodyEncoding = Encoding.UTF8,
@@ -109,17 +156,17 @@ public class ConfigurableEmailSender : IAppEmailSender
         };
         message.To.Add(toEmail);
 
-        using var client = new SmtpClient(_options.Smtp.Host, _options.Smtp.Port)
+        using var client = new SmtpClient(options.Smtp.Host, options.Smtp.Port)
         {
-            EnableSsl = _options.Smtp.EnableSsl,
+            EnableSsl = options.Smtp.EnableSsl,
             DeliveryMethod = SmtpDeliveryMethod.Network,
             // Avoid indefinite hangs when Host/Port are wrong.
             Timeout = 30_000
         };
 
-        if (!string.IsNullOrWhiteSpace(_options.Smtp.UserName))
+        if (!string.IsNullOrWhiteSpace(options.Smtp.UserName))
         {
-            client.Credentials = new NetworkCredential(_options.Smtp.UserName, _options.Smtp.Password);
+            client.Credentials = new NetworkCredential(options.Smtp.UserName, options.Smtp.Password);
         }
 
         ct.ThrowIfCancellationRequested();
@@ -127,13 +174,15 @@ public class ConfigurableEmailSender : IAppEmailSender
     }
 
     private async Task<string> WriteFallbackAsync(
+        EmailOptions options,
+        string fromAddress,
         string toEmail,
         string subject,
         string plainTextBody,
         string reason,
         CancellationToken ct)
     {
-        var dir = ResolveFallbackDirectory();
+        var dir = ResolveFallbackDirectory(options);
         Directory.CreateDirectory(dir);
 
         var safeTo = string.Concat(toEmail.Select(c => char.IsLetterOrDigit(c) || c is '@' or '.' or '-' or '_' ? c : '_'));
@@ -141,7 +190,7 @@ public class ConfigurableEmailSender : IAppEmailSender
         var path = Path.Combine(dir, fileName);
 
         var content = new StringBuilder()
-            .AppendLine($"From: {_options.FromName} <{_options.FromAddress}>")
+            .AppendLine($"From: {options.FromName} <{fromAddress}>")
             .AppendLine($"To: {toEmail}")
             .AppendLine($"Subject: {subject}")
             .AppendLine($"Utc: {DateTime.UtcNow:O}")
@@ -154,11 +203,11 @@ public class ConfigurableEmailSender : IAppEmailSender
         return path;
     }
 
-    private string ResolveFallbackDirectory()
+    private string ResolveFallbackDirectory(EmailOptions options)
     {
-        var configured = string.IsNullOrWhiteSpace(_options.FallbackDirectory)
+        var configured = string.IsNullOrWhiteSpace(options.FallbackDirectory)
             ? "App_Data/emails"
-            : _options.FallbackDirectory;
+            : options.FallbackDirectory;
 
         return Path.IsPathRooted(configured)
             ? configured
