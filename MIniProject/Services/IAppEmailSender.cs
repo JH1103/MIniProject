@@ -2,5 +2,8 @@ namespace MIniProject.Services;
 
 public interface IAppEmailSender
 {
-    Task SendAsync(string toEmail, string subject, string plainTextBody, CancellationToken ct = default);
+    /// <summary>
+    /// Attempts delivery. Callers must check <see cref="EmailSendResult.Success"/> and surface failures.
+    /// </summary>
+    Task<EmailSendResult> SendAsync(string toEmail, string subject, string plainTextBody, CancellationToken ct = default);
 }

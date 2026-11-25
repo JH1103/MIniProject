@@ -6,8 +6,10 @@ using Microsoft.Extensions.Options;
 namespace MIniProject.Services;
 
 /// <summary>
-/// Sends via SMTP when <see cref="SmtpOptions.Host"/> is configured; otherwise writes
-/// message files under <see cref="EmailOptions.FallbackDirectory"/> (safe local/dev fallback).
+/// Sends via SMTP when <see cref="SmtpOptions.Host"/> is configured.
+/// File fallback under <see cref="EmailOptions.FallbackDirectory"/> only when
+/// <see cref="EmailOptions.AllowFileFallback"/> is true and Host is empty.
+/// Failures are returned (not swallowed) so callers can notify the user.
 /// </summary>
 public class ConfigurableEmailSender : IAppEmailSender
 {
@@ -25,38 +27,73 @@ public class ConfigurableEmailSender : IAppEmailSender
         _logger = logger;
     }
 
-    public async Task SendAsync(string toEmail, string subject, string plainTextBody, CancellationToken ct = default)
+    public async Task<EmailSendResult> SendAsync(
+        string toEmail,
+        string subject,
+        string plainTextBody,
+        CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(toEmail))
         {
-            throw new ArgumentException("Recipient email is required.", nameof(toEmail));
+            return EmailSendResult.Failed("Recipient email is required.");
+        }
+
+        if (!_options.Enabled)
+        {
+            _logger.LogWarning("Email send blocked: Email:Enabled is false.");
+            return EmailSendResult.Failed(
+                "Email delivery is disabled. Set Email:Enabled to true and configure SMTP.");
+        }
+
+        if (string.IsNullOrWhiteSpace(_options.FromAddress))
+        {
+            return EmailSendResult.Failed("Email:FromAddress is not configured.");
         }
 
         var smtpConfigured = !string.IsNullOrWhiteSpace(_options.Smtp.Host);
 
-        if (_options.Enabled && smtpConfigured)
+        if (smtpConfigured)
         {
             try
             {
                 await SendSmtpAsync(toEmail, subject, plainTextBody, ct);
                 _logger.LogInformation("Email sent via SMTP to {To} subject {Subject}", toEmail, subject);
-                return;
+                return EmailSendResult.SentViaSmtp();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "SMTP send failed for {To}; writing fallback file.", toEmail);
-                await WriteFallbackAsync(toEmail, subject, plainTextBody, "smtp-error", ct);
-                return;
+                _logger.LogError(ex, "SMTP send failed for {To} subject {Subject}", toEmail, subject);
+                string? diagPath = null;
+                try
+                {
+                    diagPath = await WriteFallbackAsync(toEmail, subject, plainTextBody, "smtp-error", ct);
+                }
+                catch (Exception writeEx)
+                {
+                    _logger.LogError(writeEx, "Also failed to write SMTP error diagnostic file.");
+                }
+
+                return EmailSendResult.Failed(
+                    "We could not send the email via SMTP. Check Email:Smtp settings (Host, Port, credentials) and try again.",
+                    diagPath);
             }
         }
 
-        await WriteFallbackAsync(toEmail, subject, plainTextBody, smtpConfigured ? "disabled" : "no-smtp", ct);
-        _logger.LogInformation(
-            "Email fallback ({Reason}) for {To} subject {Subject}. Check {Dir}.",
-            smtpConfigured ? "disabled" : "SMTP Host empty",
-            toEmail,
-            subject,
-            ResolveFallbackDirectory());
+        if (_options.AllowFileFallback)
+        {
+            var path = await WriteFallbackAsync(toEmail, subject, plainTextBody, "no-smtp", ct);
+            _logger.LogWarning(
+                "Email:Smtp:Host is empty — wrote fallback file for {To} at {Path}. Configure SMTP for real delivery.",
+                toEmail,
+                path);
+            return EmailSendResult.SentViaFile(path);
+        }
+
+        _logger.LogError(
+            "Email send failed for {To}: SMTP Host empty and AllowFileFallback is false.",
+            toEmail);
+        return EmailSendResult.Failed(
+            "Email delivery is not configured. Set Email:Smtp:Host (and credentials via user secrets or environment variables).");
     }
 
     private async Task SendSmtpAsync(string toEmail, string subject, string plainTextBody, CancellationToken ct)
@@ -75,7 +112,9 @@ public class ConfigurableEmailSender : IAppEmailSender
         using var client = new SmtpClient(_options.Smtp.Host, _options.Smtp.Port)
         {
             EnableSsl = _options.Smtp.EnableSsl,
-            DeliveryMethod = SmtpDeliveryMethod.Network
+            DeliveryMethod = SmtpDeliveryMethod.Network,
+            // Avoid indefinite hangs when Host/Port are wrong.
+            Timeout = 30_000
         };
 
         if (!string.IsNullOrWhiteSpace(_options.Smtp.UserName))
@@ -83,12 +122,11 @@ public class ConfigurableEmailSender : IAppEmailSender
             client.Credentials = new NetworkCredential(_options.Smtp.UserName, _options.Smtp.Password);
         }
 
-        // SmtpClient.SendMailAsync ignores CancellationToken on older APIs; wrap for cooperative cancel.
         ct.ThrowIfCancellationRequested();
         await client.SendMailAsync(message);
     }
 
-    private async Task WriteFallbackAsync(
+    private async Task<string> WriteFallbackAsync(
         string toEmail,
         string subject,
         string plainTextBody,
@@ -113,6 +151,7 @@ public class ConfigurableEmailSender : IAppEmailSender
             .ToString();
 
         await File.WriteAllTextAsync(path, content, Encoding.UTF8, ct);
+        return path;
     }
 
     private string ResolveFallbackDirectory()
