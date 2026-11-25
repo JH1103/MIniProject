@@ -38,8 +38,43 @@ public class EquipmentRentalFormViewModel
 
     public EquipmentRentalStatus Status { get; set; } = EquipmentRentalStatus.Active;
 
+    /// <summary>When true, start/due fields mirror the linked booking and cannot be edited.</summary>
+    public bool ScheduleLocked { get; set; }
+
+    /// <summary>Guidance on what equipment can be rented for the linked booking's facility.</summary>
+    public string EquipmentGuidance { get; set; } =
+        "Select a linked booking to see which equipment you can rent for that facility, or leave unlinked to browse all club inventory.";
+
     public List<SelectListItem> EquipmentOptions { get; set; } = [];
     public List<SelectListItem> BookingOptions { get; set; } = [];
+
+    /// <summary>Client-side catalog for filtering equipment by facility when a booking is linked.</summary>
+    public List<EquipmentCatalogItem> EquipmentCatalog { get; set; } = [];
+
+    /// <summary>Client-side booking schedules used to lock the rental window.</summary>
+    public List<LinkedBookingSchedule> LinkedBookingSchedules { get; set; } = [];
+}
+
+public class EquipmentCatalogItem
+{
+    public int Id { get; set; }
+    public int FacilityId { get; set; }
+    public string FacilityName { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public int Quantity { get; set; }
+    public string Label => $"{FacilityName} · {Name} (qty {Quantity})";
+}
+
+public class LinkedBookingSchedule
+{
+    public int Id { get; set; }
+    public int FacilityId { get; set; }
+    public string FacilityName { get; set; } = string.Empty;
+    public string StartDate { get; set; } = string.Empty;
+    public string StartTime { get; set; } = string.Empty;
+    public string DueDate { get; set; } = string.Empty;
+    public string DueTime { get; set; } = string.Empty;
+    public List<string> EquipmentNames { get; set; } = [];
 }
 
 public class AdminMemberFormViewModel

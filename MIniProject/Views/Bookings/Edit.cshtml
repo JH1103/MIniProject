@@ -23,7 +23,7 @@
                     <select asp-for="SlotStart" class="form-select">
                         @foreach (var slot in Model.AvailableSlots.Where(s => s.Available))
                         {
-                            <option value="@slot.Start">@slot.Label</option>
+                            <option value="@slot.Start">@slot.Start</option>
                         }
                     </select>
                 </div>

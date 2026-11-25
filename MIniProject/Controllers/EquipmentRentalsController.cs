@@ -106,6 +106,25 @@ public class EquipmentRentalsController : Controller
             return RedirectToAction("Plans", "Membership");
         }
 
+        Booking? linkedBooking = null;
+        if (model.BookingId is int bookingId)
+        {
+            linkedBooking = await _db.Bookings
+                .Include(b => b.Facility)!.ThenInclude(f => f!.InventoryItems)
+                .FirstOrDefaultAsync(b =>
+                    b.Id == bookingId &&
+                    b.MemberId == user.Id &&
+                    b.Status != BookingStatus.Cancelled);
+            if (linkedBooking is null)
+            {
+                ModelState.AddModelError(nameof(model.BookingId), "Linked booking was not found.");
+                return View(await BuildFormAsync(user.Id, model));
+            }
+
+            // Rental window is locked to the linked booking schedule.
+            ApplyBookingSchedule(model, linkedBooking);
+        }
+
         if (!TryParseWindow(model, out var startUtc, out var dueUtc, out var windowError))
         {
             ModelState.AddModelError(string.Empty, windowError!);
@@ -125,23 +144,17 @@ public class EquipmentRentalsController : Controller
             return View(await BuildFormAsync(user.Id, model));
         }
 
+        if (linkedBooking is not null && item.FacilityId != linkedBooking.FacilityId)
+        {
+            ModelState.AddModelError(nameof(model.InventoryItemId),
+                $"Equipment must belong to {linkedBooking.Facility?.Name ?? "the linked booking's facility"}.");
+            return View(await BuildFormAsync(user.Id, model));
+        }
+
         if (model.Quantity > item.Quantity)
         {
             ModelState.AddModelError(nameof(model.Quantity), $"Only {item.Quantity} unit(s) available.");
             return View(await BuildFormAsync(user.Id, model));
-        }
-
-        if (model.BookingId is int bookingId)
-        {
-            var bookingOk = await _db.Bookings.AnyAsync(b =>
-                b.Id == bookingId &&
-                b.MemberId == user.Id &&
-                b.Status != BookingStatus.Cancelled);
-            if (!bookingOk)
-            {
-                ModelState.AddModelError(nameof(model.BookingId), "Linked booking was not found.");
-                return View(await BuildFormAsync(user.Id, model));
-            }
         }
 
         var days = Math.Max(1, (int)Math.Ceiling((dueUtc - startUtc).TotalDays));
@@ -158,7 +171,13 @@ public class EquipmentRentalsController : Controller
             DueUtc = dueUtc,
             Status = EquipmentRentalStatus.Active,
             Fee = fee,
-            Notes = model.Notes
+            Notes = linkedBooking is not null
+                ? BuildEquipmentGuidance(
+                    linkedBooking.Facility?.Name ?? "facility",
+                    (linkedBooking.Facility?.InventoryItems ?? [])
+                        .Where(i => i.Condition != InventoryCondition.Retired)
+                        .Select(i => i.Name))
+                : model.Notes
         });
         await _db.SaveChangesAsync();
 
@@ -403,34 +422,130 @@ public class EquipmentRentalsController : Controller
 
     private async Task<EquipmentRentalFormViewModel> BuildFormAsync(string memberId, EquipmentRentalFormViewModel model)
     {
-        model.EquipmentOptions = await _db.InventoryItems
+        var inventory = await _db.InventoryItems
             .Include(i => i.Facility)
             .Where(i => i.Condition != InventoryCondition.Retired && i.Facility!.IsActive)
             .OrderBy(i => i.Facility!.Name).ThenBy(i => i.Name)
-            .Select(i => new SelectListItem
-            {
-                Value = i.Id.ToString(),
-                Text = $"{i.Facility!.Name} · {i.Name} (qty {i.Quantity})",
-                Selected = i.Id == model.InventoryItemId
-            })
             .ToListAsync();
 
-        model.BookingOptions = await _db.Bookings
-            .Include(b => b.Facility)
+        model.EquipmentCatalog = inventory.Select(i => new EquipmentCatalogItem
+        {
+            Id = i.Id,
+            FacilityId = i.FacilityId,
+            FacilityName = i.Facility!.Name,
+            Name = i.Name,
+            Quantity = i.Quantity
+        }).ToList();
+
+        var bookings = await _db.Bookings
+            .Include(b => b.Facility)!.ThenInclude(f => f!.InventoryItems)
             .Where(b => b.MemberId == memberId &&
                         b.Status != BookingStatus.Cancelled &&
                         b.StartUtc >= DateTime.UtcNow.Date.AddDays(-1))
             .OrderBy(b => b.StartUtc)
-            .Select(b => new SelectListItem
-            {
-                Value = b.Id.ToString(),
-                Text = $"#{b.Id} · {b.Facility!.Name} · {b.StartUtc.ToLocalTime():dd MMM HH:mm}",
-                Selected = b.Id == model.BookingId
-            })
             .ToListAsync();
 
-        model.BookingOptions.Insert(0, new SelectListItem { Value = "", Text = "(No linked booking)" });
+        model.LinkedBookingSchedules = bookings.Select(b =>
+        {
+            var startLocal = b.StartUtc.ToLocalTime();
+            var endLocal = b.EndUtc.ToLocalTime();
+            return new LinkedBookingSchedule
+            {
+                Id = b.Id,
+                FacilityId = b.FacilityId,
+                FacilityName = b.Facility?.Name ?? string.Empty,
+                StartDate = startLocal.ToString("yyyy-MM-dd"),
+                StartTime = startLocal.ToString("HH:mm"),
+                DueDate = endLocal.ToString("yyyy-MM-dd"),
+                DueTime = endLocal.ToString("HH:mm"),
+                EquipmentNames = b.Facility?.InventoryItems
+                    .Where(i => i.Condition != InventoryCondition.Retired)
+                    .OrderBy(i => i.Name)
+                    .Select(i => i.Name)
+                    .ToList() ?? []
+            };
+        }).ToList();
+
+        model.BookingOptions = bookings.Select(b => new SelectListItem
+        {
+            Value = b.Id.ToString(),
+            Text = $"#{b.Id} · {b.Facility!.Name} · {b.StartUtc.ToLocalTime():dd MMM HH:mm}",
+            Selected = b.Id == model.BookingId
+        }).ToList();
+        model.BookingOptions.Insert(0, new SelectListItem
+        {
+            Value = "",
+            Text = "(No linked booking)",
+            Selected = model.BookingId is null
+        });
+
+        int? facilityFilter = null;
+        if (model.BookingId is int selectedBookingId)
+        {
+            var schedule = model.LinkedBookingSchedules.FirstOrDefault(s => s.Id == selectedBookingId);
+            if (schedule is not null)
+            {
+                facilityFilter = schedule.FacilityId;
+                model.ScheduleLocked = true;
+                model.StartDate = DateTime.Parse(schedule.StartDate);
+                model.StartTime = schedule.StartTime;
+                model.DueDate = DateTime.Parse(schedule.DueDate);
+                model.DueTime = schedule.DueTime;
+                model.EquipmentGuidance = BuildEquipmentGuidance(schedule.FacilityName, schedule.EquipmentNames);
+            }
+        }
+
+        if (!model.ScheduleLocked)
+        {
+            model.EquipmentGuidance =
+                "Select a linked booking to see which equipment you can rent for that facility, or leave unlinked to browse all club inventory.";
+        }
+
+        var filtered = facilityFilter is int fid
+            ? inventory.Where(i => i.FacilityId == fid)
+            : inventory;
+
+        model.EquipmentOptions = filtered.Select(i => new SelectListItem
+        {
+            Value = i.Id.ToString(),
+            Text = facilityFilter is null
+                ? $"{i.Facility!.Name} · {i.Name} (qty {i.Quantity})"
+                : $"{i.Name} (qty {i.Quantity})",
+            Selected = i.Id == model.InventoryItemId
+        }).ToList();
+
+        if (facilityFilter is not null && model.EquipmentOptions.Count == 0)
+        {
+            model.EquipmentOptions.Insert(0, new SelectListItem
+            {
+                Value = "",
+                Text = "(No rentable equipment for this facility)"
+            });
+        }
+
         return model;
+    }
+
+    private static void ApplyBookingSchedule(EquipmentRentalFormViewModel model, Booking booking)
+    {
+        var startLocal = booking.StartUtc.ToLocalTime();
+        var endLocal = booking.EndUtc.ToLocalTime();
+        model.StartDate = startLocal.Date;
+        model.StartTime = startLocal.ToString("HH:mm");
+        model.DueDate = endLocal.Date;
+        model.DueTime = endLocal.ToString("HH:mm");
+        model.ScheduleLocked = true;
+    }
+
+    private static string BuildEquipmentGuidance(string facilityName, IEnumerable<string> equipmentNames)
+    {
+        var names = equipmentNames.Where(n => !string.IsNullOrWhiteSpace(n)).Distinct().ToList();
+        if (names.Count == 0)
+        {
+            return $"No equipment inventory is listed for {facilityName}. You can still rent from other facilities by unlinking this booking.";
+        }
+
+        return $"For {facilityName}, you can rent: {string.Join(", ", names)}. Only inventory tied to this facility is shown below.";
     }
 
     private static bool TryParseWindow(
