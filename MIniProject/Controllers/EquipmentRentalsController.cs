@@ -106,15 +106,33 @@ public class EquipmentRentalsController : Controller
             return RedirectToAction("Plans", "Membership");
         }
 
+        // When the member has exactly one linkable booking, always bind it (chooser is hidden).
+        var linkableBookings = await _db.Bookings
+            .Include(b => b.Facility)!.ThenInclude(f => f!.InventoryItems)
+            .Where(b => b.MemberId == user.Id &&
+                        b.Status != BookingStatus.Cancelled &&
+                        b.StartUtc >= DateTime.UtcNow.Date.AddDays(-1))
+            .OrderBy(b => b.StartUtc)
+            .ToListAsync();
+        if (linkableBookings.Count == 1)
+        {
+            model.BookingId = linkableBookings[0].Id;
+        }
+
         Booking? linkedBooking = null;
         if (model.BookingId is int bookingId)
         {
-            linkedBooking = await _db.Bookings
-                .Include(b => b.Facility)!.ThenInclude(f => f!.InventoryItems)
-                .FirstOrDefaultAsync(b =>
-                    b.Id == bookingId &&
-                    b.MemberId == user.Id &&
-                    b.Status != BookingStatus.Cancelled);
+            linkedBooking = linkableBookings.FirstOrDefault(b => b.Id == bookingId);
+            if (linkedBooking is null)
+            {
+                linkedBooking = await _db.Bookings
+                    .Include(b => b.Facility)!.ThenInclude(f => f!.InventoryItems)
+                    .FirstOrDefaultAsync(b =>
+                        b.Id == bookingId &&
+                        b.MemberId == user.Id &&
+                        b.Status != BookingStatus.Cancelled);
+            }
+
             if (linkedBooking is null)
             {
                 ModelState.AddModelError(nameof(model.BookingId), "Linked booking was not found.");
@@ -465,6 +483,21 @@ public class EquipmentRentalsController : Controller
                     .ToList() ?? []
             };
         }).ToList();
+
+        model.LinkableBookingCount = bookings.Count;
+
+        // Sole linkable booking: auto-select and skip the chooser in the view.
+        if (bookings.Count == 1)
+        {
+            var sole = bookings[0];
+            model.BookingId = sole.Id;
+            model.SoleLinkedBookingLabel =
+                $"#{sole.Id} · {sole.Facility!.Name} · {sole.StartUtc.ToLocalTime():dd MMM HH:mm}";
+        }
+        else
+        {
+            model.SoleLinkedBookingLabel = null;
+        }
 
         model.BookingOptions = bookings.Select(b => new SelectListItem
         {

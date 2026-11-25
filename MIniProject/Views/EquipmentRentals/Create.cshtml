@@ -5,6 +5,7 @@
     var catalogJson = JsonSerializer.Serialize(Model.EquipmentCatalog);
     var schedulesJson = JsonSerializer.Serialize(Model.LinkedBookingSchedules);
     var locked = Model.ScheduleLocked;
+    var hideBookingChooser = Model.LinkableBookingCount == 1;
 }
 
 <section class="section">
@@ -19,12 +20,28 @@
             <div class="row g-3">
                 <div class="col-12">
                     <label asp-for="BookingId" class="form-label">Linked booking</label>
-                    <select asp-for="BookingId" class="form-select" asp-items="Model.BookingOptions" id="linkedBookingSelect"></select>
-                    <div class="form-text" id="linkedBookingHint">
-                        @(locked
-                            ? "Start and due times are locked to this booking’s schedule."
-                            : "Link a booking to lock the rental window and limit equipment to that facility.")
-                    </div>
+                    @if (hideBookingChooser)
+                    {
+                        <input type="hidden" asp-for="BookingId" id="linkedBookingSelect" />
+                        <input type="text"
+                               class="form-control schedule-field is-schedule-locked"
+                               value="@Model.SoleLinkedBookingLabel"
+                               readonly
+                               tabindex="-1"
+                               aria-readonly="true" />
+                        <div class="form-text" id="linkedBookingHint">
+                            Start and due times are locked to this booking’s schedule.
+                        </div>
+                    }
+                    else
+                    {
+                        <select asp-for="BookingId" class="form-select" asp-items="Model.BookingOptions" id="linkedBookingSelect"></select>
+                        <div class="form-text" id="linkedBookingHint">
+                            @(locked
+                                ? "Start and due times are locked to this booking’s schedule."
+                                : "Link a booking to lock the rental window and limit equipment to that facility.")
+                        </div>
+                    }
                 </div>
                 <div class="col-md-4">
                     <label asp-for="StartDate" class="form-label"></label>
@@ -42,13 +59,13 @@
                     <label asp-for="DueTime" class="form-label"></label>
                     <input asp-for="DueTime" class="form-control schedule-field" placeholder="HH:mm" readonly="@locked" />
                 </div>
+                <div class="col-md-8">
+                    <label asp-for="InventoryItemId" class="form-label"></label>
+                    <select asp-for="InventoryItemId" class="form-select" id="equipmentSelect" asp-items="Model.EquipmentOptions"></select>
+                </div>
                 <div class="col-md-4">
                     <label asp-for="Quantity" class="form-label"></label>
                     <input asp-for="Quantity" class="form-control" />
-                </div>
-                <div class="col-12">
-                    <label asp-for="InventoryItemId" class="form-label"></label>
-                    <select asp-for="InventoryItemId" class="form-select" id="equipmentSelect" asp-items="Model.EquipmentOptions"></select>
                 </div>
                 <div class="col-12">
                     <label class="form-label">Equipment for this facility</label>
@@ -74,13 +91,12 @@
     const guidance = document.getElementById('equipmentGuidance');
     const notesHidden = document.getElementById('notesHidden');
     const hint = document.getElementById('linkedBookingHint');
-    const scheduleFields = document.querySelectorAll('.schedule-field');
-    const defaultGuidance = 'Select a linked booking to see which equipment you can rent for that facility, or leave unlinked to browse all club inventory.';
-
     const startDate = document.getElementById('StartDate');
     const startTime = document.getElementById('StartTime');
     const dueDate = document.getElementById('DueDate');
     const dueTime = document.getElementById('DueTime');
+    const scheduleFields = [startDate, startTime, dueDate, dueTime].filter(Boolean);
+    const defaultGuidance = 'Select a linked booking to see which equipment you can rent for that facility, or leave unlinked to browse all club inventory.';
 
     function findSchedule(id) {
         if (!id) return null;
@@ -91,11 +107,31 @@
         // Use readOnly (not disabled) so locked schedule values still post with the form.
         scheduleFields.forEach(el => {
             el.readOnly = locked;
+            el.classList.toggle('is-schedule-locked', locked);
+            el.tabIndex = locked ? -1 : 0;
         });
-        hint.textContent = locked
-            ? 'Start and due times are locked to this booking’s schedule.'
-            : 'Link a booking to lock the rental window and limit equipment to that facility.';
+        if (hint) {
+            hint.textContent = locked
+                ? 'Start and due times are locked to this booking’s schedule.'
+                : 'Link a booking to lock the rental window and limit equipment to that facility.';
+        }
     }
+
+    // Readonly date inputs can still open the picker in some browsers — block interaction when locked.
+    scheduleFields.forEach(el => {
+        const blockIfLocked = (e) => {
+            if (el.readOnly) {
+                e.preventDefault();
+                el.blur();
+            }
+        };
+        el.addEventListener('mousedown', blockIfLocked);
+        el.addEventListener('click', blockIfLocked);
+        el.addEventListener('keydown', blockIfLocked);
+        el.addEventListener('focus', () => {
+            if (el.readOnly) el.blur();
+        });
+    });
 
     function buildGuidance(schedule) {
         if (!schedule) return defaultGuidance;
@@ -158,8 +194,10 @@
         }
     }
 
-    bookingSelect.addEventListener('change', applyLinkedBooking);
-    if (bookingSelect.value) {
+    if (bookingSelect && bookingSelect.tagName === 'SELECT') {
+        bookingSelect.addEventListener('change', applyLinkedBooking);
+    }
+    if (bookingSelect && bookingSelect.value) {
         applyLinkedBooking();
     }
 })();
