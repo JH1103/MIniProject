@@ -71,11 +71,27 @@ public class BookingNotificationService
 
         try
         {
-            await _emailSender.SendAsync(
+            var result = await _emailSender.SendAsync(
                 member.Email,
                 $"Booking confirmed — {facility}",
                 body.TrimEnd() + "\n",
                 ct);
+
+            if (!result.Success)
+            {
+                _logger.LogError(
+                    "Booking confirmation email failed for booking {Id} to {Email}: {Error}",
+                    bookingId,
+                    member.Email,
+                    result.ErrorMessage);
+                return;
+            }
+
+            _logger.LogInformation(
+                "Booking confirmation email for booking {Id} delivered via {Mode} to {Email}.",
+                bookingId,
+                result.Mode,
+                member.Email);
         }
         catch (Exception ex)
         {

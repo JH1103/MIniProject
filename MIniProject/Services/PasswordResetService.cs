@@ -31,17 +31,26 @@ public class PasswordResetService
     }
 
     /// <summary>
-    /// Always succeeds from the caller's perspective (no account enumeration).
-    /// Sends OTP + reset link when the email matches a member account.
+    /// Sends OTP + reset link only when the email matches a registered member account.
+    /// Returns an error for unknown emails or when delivery fails.
     /// </summary>
-    public async Task RequestResetAsync(string email, string resetUrlBase, CancellationToken ct = default)
+    public async Task<(bool Ok, string? Error, EmailDeliveryMode? Mode)> RequestResetAsync(
+        string email,
+        string resetUrlBase,
+        CancellationToken ct = default)
     {
         var normalized = email.Trim();
         var user = await _userManager.FindByEmailAsync(normalized);
         if (user is null)
         {
             _logger.LogInformation("Password reset requested for unknown email.");
-            return;
+            return (false, "No member account was found for that email address.", null);
+        }
+
+        if (!await _userManager.IsInRoleAsync(user, AppRoles.Member))
+        {
+            _logger.LogInformation("Password reset requested for non-member account {UserId}.", user.Id);
+            return (false, "No member account was found for that email address.", null);
         }
 
         var otp = GenerateOtp();
@@ -81,11 +90,22 @@ public class PasswordResetService
             — Kota Permai Golf & Country Club
             """;
 
-        await _emailSender.SendAsync(
+        var send = await _emailSender.SendAsync(
             user.Email!,
             "Reset your Kota Permai password",
             body,
             ct);
+
+        if (!send.Success)
+        {
+            _logger.LogWarning(
+                "Password reset email failed for user {UserId}: {Error}",
+                user.Id,
+                send.ErrorMessage);
+            return (false, send.ErrorMessage ?? "We could not send the reset email. Please try again later.", null);
+        }
+
+        return (true, null, send.Mode);
     }
 
     public async Task<(bool Ok, string? Error)> ResetWithTokenAsync(

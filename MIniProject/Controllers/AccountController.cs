@@ -136,7 +136,19 @@ public class AccountController : Controller
             values: null,
             protocol: Request.Scheme)!;
 
-        await _passwordResetService.RequestResetAsync(model.Email, resetUrl);
+        var (ok, error, mode) = await _passwordResetService.RequestResetAsync(model.Email, resetUrl);
+        if (!ok)
+        {
+            ModelState.AddModelError(nameof(model.Email), error ?? "Unable to process password reset.");
+            TempData["Error"] = error ?? "Unable to process password reset.";
+            return View(model);
+        }
+
+        if (mode == EmailDeliveryMode.FileFallback)
+        {
+            TempData["Warning"] =
+                "SMTP is not configured, so the reset message was saved locally under App_Data/emails (Development fallback). Configure Email:Smtp:Host for real inbox delivery.";
+        }
 
         return RedirectToAction(nameof(ForgotPasswordConfirmation));
     }
