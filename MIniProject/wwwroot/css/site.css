@@ -847,6 +847,31 @@ body.nav-open .nav-toggle__bar:nth-child(3) {
   background: rgba(255, 255, 255, 0.72);
   border: 1px solid var(--card-line);
 }
+.admin-ops-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin: 0 0 0.9rem;
+}
+.admin-ops-links a {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.55rem 0.95rem;
+  border-radius: 999px;
+  border: 1px solid var(--card-line);
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--ink);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.admin-ops-links a:hover,
+.admin-ops-links a.is-active {
+  background: var(--forest);
+  border-color: var(--forest);
+  color: #fff;
+}
+
 .admin-tabs a {
   display: inline-flex;
   align-items: center;
