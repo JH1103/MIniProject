@@ -7,10 +7,12 @@ namespace MIniProject.Services;
 public class PaymentService
 {
     private readonly ApplicationDbContext _db;
+    private readonly BookingService _bookingService;
 
-    public PaymentService(ApplicationDbContext db)
+    public PaymentService(ApplicationDbContext db, BookingService bookingService)
     {
         _db = db;
+        _bookingService = bookingService;
     }
 
     public async Task<(bool Ok, string? Error)> PayInvoiceAsync(int invoiceId, string userId, string method, CancellationToken ct = default)
@@ -37,6 +39,7 @@ public class PaymentService
             invoice.Booking.Status = BookingStatus.Cancelled;
             invoice.Booking.CancelledAt = DateTime.UtcNow;
             invoice.Status = InvoiceStatus.Cancelled;
+            await _bookingService.CancelLinkedEquipmentRentalsAsync([invoice.Booking.Id], ct);
             await _db.SaveChangesAsync(ct);
             return (false, "Payment hold expired. The booking was released.");
         }
@@ -177,6 +180,9 @@ public class PaymentService
                 }
             }
         }
+
+        // Linked rentals become Cancelled (inactive) so the member cannot keep using them.
+        await _bookingService.CancelLinkedEquipmentRentalsAsync([booking.Id], ct);
 
         await _db.SaveChangesAsync(ct);
         return (true, null);

@@ -136,6 +136,50 @@
             </div>
             <div class="col-lg-5">
                 <div class="panel mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h3 class="h5 mb-0">Equipment rentals</h3>
+                        <a asp-controller="EquipmentRentals" asp-action="Index">All rentals</a>
+                    </div>
+                    @if (!Model.EquipmentRentals.Any())
+                    {
+                        <p class="muted mb-0">No equipment rentals yet.</p>
+                    }
+                    else
+                    {
+                        <ul class="mb-0">
+                            @foreach (var rental in Model.EquipmentRentals)
+                            {
+                                <li class="mb-2">
+                                    <a asp-controller="EquipmentRentals" asp-action="Details" asp-route-id="@rental.Id">
+                                        @(rental.InventoryItem?.Name ?? "Equipment") × @rental.Quantity
+                                    </a>
+                                    @if (rental.Status == EquipmentRentalStatus.Active)
+                                    {
+                                        <span class="badge-soft">Active</span>
+                                    }
+                                    else if (rental.Status == EquipmentRentalStatus.Cancelled)
+                                    {
+                                        <span class="badge-warn">Inactive</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge-warn">@rental.Status</span>
+                                    }
+                                    <div class="small muted">
+                                        @(rental.InventoryItem?.Facility?.Name ?? "Facility")
+                                        · @rental.StartUtc.ToLocalTime().ToString("dd MMM HH:mm")
+                                        @if (rental.BookingId is not null)
+                                        {
+                                            <text>· booking </text>
+                                            <a asp-controller="Bookings" asp-action="Details" asp-route-id="@rental.BookingId">#@rental.BookingId</a>
+                                        }
+                                    </div>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div>
+                <div class="panel mb-3">
                     <h3 class="h5">Guest passes</h3>
                     @if (!Model.Passes.Any())
                     {

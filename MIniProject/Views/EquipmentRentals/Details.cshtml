@@ -11,7 +11,7 @@
     <div class="container" style="max-width:720px">
         <div class="section-head">
             <h2>Equipment rental #@Model.Id</h2>
-            <p class="muted mb-0">@Model.InventoryItem?.Name · @Model.Status</p>
+            <p class="muted mb-0">@Model.InventoryItem?.Name · @(Model.Status == EquipmentRentalStatus.Cancelled ? "Inactive" : Model.Status.ToString())</p>
         </div>
         <div class="panel">
             <div class="row g-3">
@@ -56,6 +56,10 @@
                     </form>
                 }
                 <a class="btn btn-ghost" asp-action="Index">Back to list</a>
+                @if (User.IsInRole(AppRoles.Member))
+                {
+                    <a class="btn btn-primary" asp-controller="Member" asp-action="Dashboard">My Dashboard</a>
+                }
             </div>
         </div>
     </div>

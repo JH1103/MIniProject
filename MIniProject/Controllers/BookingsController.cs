@@ -83,9 +83,11 @@ public class BookingsController : Controller
                 State = s.State
             }).ToList(),
             Equipment = facility.InventoryItems
+                .Where(i => i.Condition != InventoryCondition.Retired)
                 .OrderBy(i => i.Name)
                 .Select(i => new EquipmentOption
                 {
+                    Id = i.Id,
                     Name = i.Name,
                     Quantity = i.Quantity,
                     Condition = i.Condition.ToString()
@@ -129,11 +131,7 @@ public class BookingsController : Controller
         var endLocal = model.Date.Date.Add(endTs);
 
         var notes = model.Notes?.Trim();
-        if (model.SelectedEquipment.Count > 0)
-        {
-            var equipmentNote = "Equipment: " + string.Join(", ", model.SelectedEquipment.Where(e => !string.IsNullOrWhiteSpace(e)));
-            notes = string.IsNullOrWhiteSpace(notes) ? equipmentNote : $"{notes}\n{equipmentNote}";
-        }
+        var selectedEquipmentIds = model.SelectedEquipmentIds.Where(id => id > 0).Distinct().ToList();
 
         var (ok, error, booking) = await _bookingService.CreateBookingAsync(
             user.Id,
@@ -148,6 +146,11 @@ public class BookingsController : Controller
         {
             TempData["Error"] = error ?? "Unable to create booking.";
             return RedirectToAction(nameof(Create), new { facilityId = model.FacilityId, date = model.Date.ToString("yyyy-MM-dd"), start = model.SlotStart, end = model.SlotEnd });
+        }
+
+        if (selectedEquipmentIds.Count > 0)
+        {
+            await CreateBookingEquipmentRentalsAsync(booking, selectedEquipmentIds);
         }
 
         TempData["Success"] = facility.BookingMode == BookingMode.ApprovalRequired
@@ -175,6 +178,7 @@ public class BookingsController : Controller
             .Include(b => b.Facility)
             .Include(b => b.Invoice)
             .Include(b => b.Guests).ThenInclude(bg => bg.Guest)
+            .Include(b => b.EquipmentRentals).ThenInclude(r => r.InventoryItem)
             .FirstOrDefaultAsync(b => b.Id == id);
 
         if (booking is null)
@@ -186,6 +190,17 @@ public class BookingsController : Controller
         if (!isStaff && booking.MemberId != user.Id)
         {
             return Forbid();
+        }
+
+        // Safety net: cancelled bookings must not leave linked rentals Active.
+        if (booking.Status == BookingStatus.Cancelled &&
+            booking.EquipmentRentals.Any(r => r.Status == EquipmentRentalStatus.Active))
+        {
+            await _bookingService.CancelLinkedEquipmentRentalsAsync([booking.Id]);
+            await _db.SaveChangesAsync();
+            await _db.Entry(booking).Collection(b => b.EquipmentRentals).Query()
+                .Include(r => r.InventoryItem)
+                .LoadAsync();
         }
 
         return View(booking);
@@ -333,6 +348,7 @@ public class BookingsController : Controller
         var booking = await _db.Bookings
             .Include(b => b.Invoice)
             .Include(b => b.Guests)
+            .Include(b => b.EquipmentRentals)
             .FirstOrDefaultAsync(b => b.Id == id);
         if (booking is null)
         {
@@ -346,6 +362,11 @@ public class BookingsController : Controller
         }
 
         _db.BookingGuests.RemoveRange(booking.Guests);
+        foreach (var rental in booking.EquipmentRentals)
+        {
+            rental.BookingId = null;
+        }
+
         if (booking.Invoice is not null)
         {
             booking.Invoice.BookingId = null;
@@ -386,5 +407,57 @@ public class BookingsController : Controller
         await _db.SaveChangesAsync();
         TempData["Success"] = "You have been added to the waiting list for this slot.";
         return RedirectToAction("Details", "Facilities", new { id = facilityId, date = date.ToString("yyyy-MM-dd") });
+    }
+
+    private const decimal FeePerUnitPerDay = 15m;
+
+    private async Task CreateBookingEquipmentRentalsAsync(Booking booking, List<int> inventoryItemIds)
+    {
+        var items = await _db.InventoryItems
+            .Where(i =>
+                inventoryItemIds.Contains(i.Id) &&
+                i.FacilityId == booking.FacilityId &&
+                i.Condition != InventoryCondition.Retired)
+            .ToListAsync();
+
+        if (items.Count == 0)
+        {
+            return;
+        }
+
+        var days = Math.Max(1, (int)Math.Ceiling((booking.EndUtc - booking.StartUtc).TotalDays));
+        var names = new List<string>();
+
+        foreach (var item in items)
+        {
+            if (item.Quantity < 1)
+            {
+                continue;
+            }
+
+            item.Quantity -= 1;
+            names.Add(item.Name);
+            _db.EquipmentRentals.Add(new EquipmentRental
+            {
+                MemberId = booking.MemberId,
+                InventoryItemId = item.Id,
+                BookingId = booking.Id,
+                Quantity = 1,
+                StartUtc = booking.StartUtc,
+                DueUtc = booking.EndUtc,
+                Status = EquipmentRentalStatus.Active,
+                Fee = Math.Round(FeePerUnitPerDay * days, 2),
+                Notes = $"Rented with booking #{booking.Id}"
+            });
+        }
+
+        if (names.Count > 0)
+        {
+            var equipmentNote = "Equipment: " + string.Join(", ", names);
+            booking.Notes = string.IsNullOrWhiteSpace(booking.Notes)
+                ? equipmentNote
+                : $"{booking.Notes}\n{equipmentNote}";
+            await _db.SaveChangesAsync();
+        }
     }
 }
