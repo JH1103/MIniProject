@@ -223,6 +223,13 @@ public class EquipmentRentalsController : Controller
             return RedirectToAction(nameof(Details), new { id });
         }
 
+        if (await IsLinkedBookingCancelledAsync(rental))
+        {
+            await ForceCancelRentalAsync(rental);
+            TempData["Error"] = "This rental is linked to a cancelled booking and is now inactive.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
         var model = new EquipmentRentalFormViewModel
         {
             Id = rental.Id,
@@ -262,6 +269,13 @@ public class EquipmentRentalsController : Controller
             return RedirectToAction(nameof(Details), new { id = rental.Id });
         }
 
+        if (await IsLinkedBookingCancelledAsync(rental))
+        {
+            await ForceCancelRentalAsync(rental);
+            TempData["Error"] = "This rental is linked to a cancelled booking and is now inactive.";
+            return RedirectToAction(nameof(Details), new { id = rental.Id });
+        }
+
         if (!TryParseWindow(model, out var startUtc, out var dueUtc, out var windowError))
         {
             ModelState.AddModelError(string.Empty, windowError!);
@@ -291,6 +305,24 @@ public class EquipmentRentalsController : Controller
             return View(await BuildFormAsync(rental.MemberId, model));
         }
 
+        // Cannot reactivate or keep Active when linking to a cancelled booking.
+        if (model.BookingId is int linkBookingId)
+        {
+            var linked = await _db.Bookings.AsNoTracking()
+                .FirstOrDefaultAsync(b => b.Id == linkBookingId && b.MemberId == rental.MemberId);
+            if (linked is null)
+            {
+                ModelState.AddModelError(nameof(model.BookingId), "Linked booking was not found.");
+                return View(await BuildFormAsync(rental.MemberId, model));
+            }
+
+            if (linked.Status == BookingStatus.Cancelled)
+            {
+                ModelState.AddModelError(nameof(model.BookingId), "Cannot link a rental to a cancelled booking.");
+                return View(await BuildFormAsync(rental.MemberId, model));
+            }
+        }
+
         item.Quantity -= model.Quantity;
         var days = Math.Max(1, (int)Math.Ceiling((dueUtc - startUtc).TotalDays));
         rental.InventoryItemId = item.Id;
@@ -302,6 +334,13 @@ public class EquipmentRentalsController : Controller
         rental.Fee = Math.Round(FeePerUnitPerDay * model.Quantity * days, 2);
         if (User.IsInRole(AppRoles.Staff) || User.IsInRole(AppRoles.Administrator))
         {
+            // Staff cannot mark Cancelled-booking rentals Active via status override.
+            if (model.Status == EquipmentRentalStatus.Active && await IsLinkedBookingCancelledAsync(rental))
+            {
+                ModelState.AddModelError(nameof(model.Status), "Rentals linked to cancelled bookings cannot be active.");
+                return View(await BuildFormAsync(rental.MemberId, model));
+            }
+
             rental.Status = model.Status;
         }
 
@@ -329,6 +368,13 @@ public class EquipmentRentalsController : Controller
         if (rental.Status != EquipmentRentalStatus.Active)
         {
             TempData["Error"] = "Only active rentals can be returned.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        if (await IsLinkedBookingCancelledAsync(rental))
+        {
+            await ForceCancelRentalAsync(rental);
+            TempData["Error"] = "This rental is linked to a cancelled booking and is now inactive.";
             return RedirectToAction(nameof(Details), new { id });
         }
 
@@ -436,6 +482,43 @@ public class EquipmentRentalsController : Controller
 
         var user = await _userManager.GetUserAsync(User);
         return user is not null && rental.MemberId == user.Id;
+    }
+
+    private async Task<bool> IsLinkedBookingCancelledAsync(EquipmentRental rental)
+    {
+        if (rental.BookingId is null)
+        {
+            return false;
+        }
+
+        if (rental.Booking is not null)
+        {
+            return rental.Booking.Status == BookingStatus.Cancelled;
+        }
+
+        return await _db.Bookings.AnyAsync(b =>
+            b.Id == rental.BookingId && b.Status == BookingStatus.Cancelled);
+    }
+
+    private async Task ForceCancelRentalAsync(EquipmentRental rental)
+    {
+        if (rental.Status != EquipmentRentalStatus.Active)
+        {
+            return;
+        }
+
+        if (rental.InventoryItem is null)
+        {
+            await _db.Entry(rental).Reference(r => r.InventoryItem).LoadAsync();
+        }
+
+        rental.Status = EquipmentRentalStatus.Cancelled;
+        if (rental.InventoryItem is not null)
+        {
+            rental.InventoryItem.Quantity += rental.Quantity;
+        }
+
+        await _db.SaveChangesAsync();
     }
 
     private async Task<EquipmentRentalFormViewModel> BuildFormAsync(string memberId, EquipmentRentalFormViewModel model)

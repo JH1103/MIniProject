@@ -38,6 +38,7 @@ public class Booking
 
     public Invoice? Invoice { get; set; }
     public ICollection<BookingGuest> Guests { get; set; } = new List<BookingGuest>();
+    public ICollection<EquipmentRental> EquipmentRentals { get; set; } = new List<EquipmentRental>();
 }
 
 public class BookingGuest

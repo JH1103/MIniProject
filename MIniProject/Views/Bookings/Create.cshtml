@@ -116,7 +116,7 @@
                             {
                                 var item = Model.Equipment[i];
                                 <label class="equipment-card">
-                                    <input type="checkbox" name="SelectedEquipment" value="@item.Name" />
+                                    <input type="checkbox" name="SelectedEquipmentIds" value="@item.Id" @(item.Quantity < 1 ? "disabled" : null) />
                                     <span>
                                         <strong>@item.Name</strong>
                                         <span class="d-block small muted">× @item.Quantity · @item.Condition</span>
@@ -124,7 +124,7 @@
                                 </label>
                             }
                         </div>
-                        <p class="small muted mt-3 mb-0">Selected equipment is noted on your reservation for staff setup.</p>
+                        <p class="small muted mt-3 mb-0">Selected equipment is rented for this booking window and shown on your booking details.</p>
                     }
                 </div>
 

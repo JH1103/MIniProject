@@ -46,7 +46,38 @@ public class BookingService
 
         if (expired.Count > 0)
         {
+            await CancelLinkedEquipmentRentalsAsync(expired.Select(b => b.Id), ct);
             await _db.SaveChangesAsync(ct);
+        }
+    }
+
+    /// <summary>
+    /// Marks active equipment rentals linked to the given bookings as Cancelled (inactive)
+    /// and restores inventory stock so members cannot keep using them.
+    /// </summary>
+    public async Task CancelLinkedEquipmentRentalsAsync(IEnumerable<int> bookingIds, CancellationToken ct = default)
+    {
+        var ids = bookingIds.Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return;
+        }
+
+        var rentals = await _db.EquipmentRentals
+            .Include(r => r.InventoryItem)
+            .Where(r =>
+                r.BookingId != null &&
+                ids.Contains(r.BookingId.Value) &&
+                r.Status == EquipmentRentalStatus.Active)
+            .ToListAsync(ct);
+
+        foreach (var rental in rentals)
+        {
+            rental.Status = EquipmentRentalStatus.Cancelled;
+            if (rental.InventoryItem is not null)
+            {
+                rental.InventoryItem.Quantity += rental.Quantity;
+            }
         }
     }
 

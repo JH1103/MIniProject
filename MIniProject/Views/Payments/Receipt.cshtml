@@ -40,8 +40,12 @@
                     }
                 </ul>
             }
-            <div class="mt-4">
+            <div class="mt-4 d-flex flex-wrap gap-2">
                 <a class="btn btn-ghost" asp-action="History">Payment history</a>
+                @if (User.IsInRole(AppRoles.Member))
+                {
+                    <a class="btn btn-primary" asp-controller="Member" asp-action="Dashboard">My Dashboard</a>
+                }
             </div>
         </div>
     </div>

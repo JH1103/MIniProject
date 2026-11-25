@@ -35,7 +35,8 @@ public class BookingCreateViewModel
 
     public List<EquipmentOption> Equipment { get; set; } = [];
 
-    public List<string> SelectedEquipment { get; set; } = [];
+    /// <summary>Inventory item IDs selected during booking (creates linked equipment rentals).</summary>
+    public List<int> SelectedEquipmentIds { get; set; } = [];
 }
 
 public class GuestInputModel
@@ -56,6 +57,7 @@ public class SlotOption
 
 public class EquipmentOption
 {
+    public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public int Quantity { get; set; }
     public string Condition { get; set; } = string.Empty;
@@ -66,6 +68,7 @@ public class MemberDashboardViewModel
     public ApplicationUser User { get; set; } = null!;
     public Subscription? Subscription { get; set; }
     public List<Booking> UpcomingBookings { get; set; } = [];
+    public List<EquipmentRental> EquipmentRentals { get; set; } = [];
     public List<Invoice> Invoices { get; set; } = [];
     public List<VisitorPass> Passes { get; set; } = [];
     public string MemberPassCode { get; set; } = string.Empty;

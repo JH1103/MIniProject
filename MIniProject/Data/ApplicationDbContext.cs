@@ -183,7 +183,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
         builder.Entity<EquipmentRental>()
             .HasOne(r => r.Booking)
-            .WithMany()
+            .WithMany(b => b.EquipmentRentals)
             .HasForeignKey(r => r.BookingId)
             .OnDelete(DeleteBehavior.NoAction);
 

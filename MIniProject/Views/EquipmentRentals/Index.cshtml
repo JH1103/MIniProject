@@ -11,10 +11,13 @@
                 <h2>Equipment rentals</h2>
                 <p class="muted mb-0">Rent facility equipment, track returns, and remove invalid records.</p>
             </div>
-            @if (User.IsInRole(AppRoles.Member))
-            {
-                <a class="btn btn-primary" asp-action="Create">+ New rental</a>
-            }
+            <div class="d-flex flex-wrap gap-2">
+                @if (User.IsInRole(AppRoles.Member))
+                {
+                    <a class="btn btn-ghost" asp-controller="Member" asp-action="Dashboard">My Dashboard</a>
+                    <a class="btn btn-primary" asp-action="Create">+ New rental</a>
+                }
+            </div>
         </div>
 
         <div class="panel">
@@ -62,6 +65,10 @@
                                     @if (rental.Status == EquipmentRentalStatus.Active)
                                     {
                                         <span class="badge-soft">Active</span>
+                                    }
+                                    else if (rental.Status == EquipmentRentalStatus.Cancelled)
+                                    {
+                                        <span class="badge-warn">Inactive</span>
                                     }
                                     else if (rental.Status == EquipmentRentalStatus.Invalid)
                                     {

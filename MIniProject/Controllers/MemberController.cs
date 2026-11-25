@@ -81,6 +81,17 @@ public class MemberController : Controller
                 .OrderBy(b => b.StartUtc)
                 .Take(10)
                 .ToListAsync(),
+            EquipmentRentals = await _db.EquipmentRentals
+                .Include(r => r.InventoryItem)!.ThenInclude(i => i!.Facility)
+                .Include(r => r.Booking)
+                .Where(r => r.MemberId == user.Id &&
+                            (r.Status == EquipmentRentalStatus.Active ||
+                             r.Status == EquipmentRentalStatus.Cancelled ||
+                             r.Status == EquipmentRentalStatus.Returned))
+                .OrderBy(r => r.Status == EquipmentRentalStatus.Active ? 0 : 1)
+                .ThenByDescending(r => r.CreatedAt)
+                .Take(10)
+                .ToListAsync(),
             Invoices = await _db.Invoices
                 .Where(i => i.UserId == user.Id)
                 .OrderByDescending(i => i.IssuedAt)

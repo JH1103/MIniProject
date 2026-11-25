@@ -15,6 +15,45 @@
                 <div class="col-md-4"><strong>Amount</strong><div>MYR @Model.Amount.ToString("N2")</div></div>
                 <div class="col-md-4"><strong>Hold expires</strong><div>@(Model.PaymentHoldExpiresAt?.ToLocalTime().ToString("dd MMM HH:mm") ?? "—")</div></div>
             </div>
+            <hr />
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                <h3 class="h6 mb-0">Equipment rented</h3>
+                @if (User.IsInRole(AppRoles.Member) && Model.Status is BookingStatus.Pending or BookingStatus.AwaitingPayment or BookingStatus.Confirmed)
+                {
+                    <a class="small" asp-controller="EquipmentRentals" asp-action="Create">+ Rent equipment</a>
+                }
+            </div>
+            @if (!Model.EquipmentRentals.Any())
+            {
+                <p class="muted mb-0">No equipment rented for this booking.</p>
+            }
+            else
+            {
+                <ul class="mb-0">
+                    @foreach (var rental in Model.EquipmentRentals.OrderBy(r => r.InventoryItem?.Name))
+                    {
+                        <li>
+                            <a asp-controller="EquipmentRentals" asp-action="Details" asp-route-id="@rental.Id">
+                                @(rental.InventoryItem?.Name ?? "Equipment") × @rental.Quantity
+                            </a>
+                            · MYR @rental.Fee.ToString("N2")
+                            ·
+                            @if (rental.Status == EquipmentRentalStatus.Active)
+                            {
+                                <span class="badge-soft">Active</span>
+                            }
+                            else if (rental.Status == EquipmentRentalStatus.Cancelled)
+                            {
+                                <span class="badge-warn">Inactive</span>
+                            }
+                            else
+                            {
+                                <span class="badge-warn">@rental.Status</span>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
             @if (Model.Guests.Any())
             {
                 <hr />
