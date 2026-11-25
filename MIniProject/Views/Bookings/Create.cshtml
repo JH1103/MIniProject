@@ -116,15 +116,21 @@
                             {
                                 var item = Model.Equipment[i];
                                 <label class="equipment-card">
-                                    <input type="checkbox" name="SelectedEquipmentIds" value="@item.Id" @(item.Quantity < 1 ? "disabled" : null) />
+                                    <input type="checkbox"
+                                           name="SelectedEquipmentIds"
+                                           value="@item.Id"
+                                           data-name="@item.Name"
+                                           data-daily-fee="@item.DailyFee.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                           @(item.Quantity < 1 ? "disabled" : null) />
                                     <span>
                                         <strong>@item.Name</strong>
                                         <span class="d-block small muted">× @item.Quantity · @item.Condition</span>
+                                        <span class="d-block small">MYR @item.DailyFee.ToString("N2")/day · full price</span>
                                     </span>
                                 </label>
                             }
                         </div>
-                        <p class="small muted mt-3 mb-0">Selected equipment is rented for this booking window and shown on your booking details.</p>
+                        <p class="small muted mt-3 mb-0">Equipment is charged at full price (member discount applies to the facility fee only).</p>
                     }
                 </div>
 
@@ -147,13 +153,26 @@
                         <div><span class="muted">Facility</span><strong>@Model.FacilityName</strong></div>
                         <div><span class="muted">Date</span><strong id="reviewDate">@Model.Date.ToString("dd MMM yyyy")</strong></div>
                         <div><span class="muted">Time</span><strong id="reviewTime">@(string.IsNullOrEmpty(Model.SlotStart) ? "—" : $"{Model.SlotStart} – {Model.SlotEnd}")</strong></div>
-                        <div><span class="muted">Rate</span><strong>MYR @Model.HourlyRate.ToString("N2")/hr · @Model.DiscountPercent.ToString("N0")% member discount</strong></div>
+                        <div><span class="muted">Facility rate</span><strong>MYR @Model.HourlyRate.ToString("N2")/hr · @Model.DiscountPercent.ToString("N0")% member discount on facility only</strong></div>
                         <div>
                             <span class="muted">Booking mode</span>
                             <strong>@(Model.BookingMode == BookingMode.ApprovalRequired ? "Staff approval required before payment" : "Instant confirmation after payment")</strong>
                         </div>
+                        <hr class="my-1 opacity-25" />
+                        <div>
+                            <span class="muted">Facility fee</span>
+                            <strong id="reviewFacilityFee">—</strong>
+                        </div>
+                        <div id="reviewEquipmentBlock">
+                            <span class="muted">Equipment (full price)</span>
+                            <div id="reviewEquipmentLines" class="review-equipment-lines"></div>
+                        </div>
+                        <div class="review-total">
+                            <span class="muted">Grand total</span>
+                            <strong id="reviewGrandTotal">MYR 0.00</strong>
+                        </div>
                     </div>
-                    <p class="muted small mt-3 mb-0">Submitting holds the slot and continues to payment when an invoice is created.</p>
+                    <p class="muted small mt-3 mb-0">Submitting holds the slot and continues to payment when an invoice is created. Member discount never applies to equipment rental.</p>
                 </div>
 
                 <div class="booking-modal__footer">
@@ -172,6 +191,8 @@
 (() => {
   let step = 1;
   const total = 4;
+  const hourlyRate = @Model.HourlyRate.ToString(System.Globalization.CultureInfo.InvariantCulture);
+  const discountPercent = @Model.DiscountPercent.ToString(System.Globalization.CultureInfo.InvariantCulture);
   const steps = [...document.querySelectorAll('.booking-step')];
   const tabs = [...document.querySelectorAll('[data-step-tab]')];
   const nextBtn = document.getElementById('bookingNextBtn');
@@ -183,6 +204,28 @@
   const endSelect = document.getElementById('slotEndSelect');
   const reviewDate = document.getElementById('reviewDate');
   const reviewTime = document.getElementById('reviewTime');
+  const reviewFacilityFee = document.getElementById('reviewFacilityFee');
+  const reviewEquipmentLines = document.getElementById('reviewEquipmentLines');
+  const reviewGrandTotal = document.getElementById('reviewGrandTotal');
+  const equipmentChecks = [...document.querySelectorAll('input[name="SelectedEquipmentIds"]')];
+
+  const money = (n) => `MYR ${n.toFixed(2)}`;
+
+  const parseTime = (value) => {
+    if (!value) return null;
+    const parts = value.split(':').map(Number);
+    if (parts.length < 2 || parts.some((p) => Number.isNaN(p))) return null;
+    return parts[0] + parts[1] / 60;
+  };
+
+  const billableHours = () => {
+    const start = parseTime(startSelect?.value);
+    const end = parseTime(endSelect?.value);
+    if (start == null || end == null || end <= start) return 0;
+    return end - start;
+  };
+
+  const billableDays = (hours) => Math.max(1, Math.ceil(hours / 24));
 
   const syncReview = () => {
     if (dateInput && reviewDate) {
@@ -195,6 +238,42 @@
       const start = startSelect?.value || '';
       const end = endSelect?.value || '';
       reviewTime.textContent = start && end ? `${start} – ${end}` : '—';
+    }
+
+    const hours = billableHours();
+    const facilityBase = Math.round(hourlyRate * hours * 100) / 100;
+    const facilityDiscount = Math.round(facilityBase * (discountPercent / 100) * 100) / 100;
+    const facilityNet = Math.max(0, Math.round((facilityBase - facilityDiscount) * 100) / 100);
+    const days = hours > 0 ? billableDays(hours) : 1;
+
+    if (reviewFacilityFee) {
+      if (hours <= 0) {
+        reviewFacilityFee.textContent = 'Select a time slot';
+      } else if (facilityDiscount > 0) {
+        reviewFacilityFee.textContent = `${money(facilityNet)} (was ${money(facilityBase)}, −${discountPercent}% member)`;
+      } else {
+        reviewFacilityFee.textContent = money(facilityNet);
+      }
+    }
+
+    let equipmentTotal = 0;
+    const lines = [];
+    equipmentChecks.filter((el) => el.checked && !el.disabled).forEach((el) => {
+      const daily = Number(el.dataset.dailyFee || 0);
+      const line = Math.round(daily * days * 100) / 100;
+      equipmentTotal += line;
+      lines.push(`<div class="review-equipment-line"><span>${el.dataset.name || 'Equipment'} × 1 · ${days} day${days === 1 ? '' : 's'}</span><strong>${money(line)}</strong></div>`);
+    });
+
+    if (reviewEquipmentLines) {
+      reviewEquipmentLines.innerHTML = lines.length
+        ? lines.join('')
+        : '<div class="small muted">No equipment selected</div>';
+    }
+
+    if (reviewGrandTotal) {
+      const grand = Math.round((facilityNet + equipmentTotal) * 100) / 100;
+      reviewGrandTotal.textContent = hours > 0 ? money(grand) : '—';
     }
   };
 
@@ -229,6 +308,7 @@
   dateInput?.addEventListener('change', syncReview);
   startSelect?.addEventListener('change', syncReview);
   endSelect?.addEventListener('change', syncReview);
+  equipmentChecks.forEach((el) => el.addEventListener('change', syncReview));
   showStep(1);
 })();
 </script>

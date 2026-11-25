@@ -61,6 +61,9 @@ public class EquipmentOption
     public string Name { get; set; } = string.Empty;
     public int Quantity { get; set; }
     public string Condition { get; set; } = string.Empty;
+
+    /// <summary>Full daily rental rate (member discount does not apply).</summary>
+    public decimal DailyFee { get; set; } = 15m;
 }
 
 public class MemberDashboardViewModel

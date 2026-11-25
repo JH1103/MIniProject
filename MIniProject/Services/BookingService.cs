@@ -105,6 +105,7 @@ public class BookingService
         IEnumerable<(string FullName, string? IdNumber, string? Phone)> guests,
         string? notes = null,
         bool isRecurring = false,
+        IEnumerable<int>? selectedEquipmentIds = null,
         CancellationToken ct = default)
     {
         await ReleaseExpiredHoldsAsync(ct);
@@ -185,7 +186,40 @@ public class BookingService
         var hours = (decimal)(endUtc - startUtc).TotalHours;
         var baseAmount = Math.Round(facility.HourlyRate * hours, 2);
         var discount = Math.Round(baseAmount * (subscription.MembershipPlan.DiscountPercent / 100m), 2);
-        var amount = Math.Max(0, baseAmount - discount);
+        var facilityAmount = Math.Max(0, baseAmount - discount);
+
+        // Resolve equipment up front so invoice/booking totals include full-price rental fees
+        // before any zero-amount auto-confirm path runs.
+        var equipmentIdList = (selectedEquipmentIds ?? Enumerable.Empty<int>())
+            .Where(id => id > 0)
+            .Distinct()
+            .ToList();
+        List<InventoryItem> equipmentItems = equipmentIdList.Count == 0
+            ? []
+            : await _db.InventoryItems
+                .Where(i =>
+                    equipmentIdList.Contains(i.Id) &&
+                    i.FacilityId == facilityId &&
+                    i.Condition != InventoryCondition.Retired &&
+                    i.Quantity >= 1)
+                .ToListAsync(ct);
+
+        decimal equipmentTotal = 0m;
+        foreach (var _ in equipmentItems)
+        {
+            equipmentTotal += EquipmentPricing.CalculateFee(1, startUtc, endUtc);
+        }
+
+        var amount = Math.Round(facilityAmount + equipmentTotal, 2);
+        var equipmentNames = equipmentItems.Select(i => i.Name).ToList();
+        var bookingNotes = notes;
+        if (equipmentNames.Count > 0)
+        {
+            var equipmentNote = "Equipment: " + string.Join(", ", equipmentNames);
+            bookingNotes = string.IsNullOrWhiteSpace(bookingNotes)
+                ? equipmentNote
+                : $"{bookingNotes}\n{equipmentNote}";
+        }
 
         var booking = new Booking
         {
@@ -194,7 +228,7 @@ public class BookingService
             StartUtc = startUtc,
             EndUtc = endUtc,
             Amount = amount,
-            Notes = notes,
+            Notes = bookingNotes,
             IsRecurring = isRecurring,
             RecurrenceGroupId = isRecurring ? Guid.NewGuid().ToString("N") : null,
             CreatedAt = DateTime.UtcNow,
@@ -206,6 +240,23 @@ public class BookingService
 
         _db.Bookings.Add(booking);
         await _db.SaveChangesAsync(ct);
+
+        foreach (var item in equipmentItems)
+        {
+            item.Quantity -= 1;
+            _db.EquipmentRentals.Add(new EquipmentRental
+            {
+                MemberId = memberId,
+                InventoryItemId = item.Id,
+                BookingId = booking.Id,
+                Quantity = 1,
+                StartUtc = startUtc,
+                DueUtc = endUtc,
+                Status = EquipmentRentalStatus.Active,
+                Fee = EquipmentPricing.CalculateFee(1, startUtc, endUtc),
+                Notes = $"Rented with booking #{booking.Id}"
+            });
+        }
 
         foreach (var g in guestList)
         {
@@ -245,7 +296,9 @@ public class BookingService
                 BookingId = booking.Id,
                 Amount = amount,
                 Status = amount == 0 ? InvoiceStatus.Paid : InvoiceStatus.Unpaid,
-                Description = $"Booking for {facility.Name}",
+                Description = equipmentTotal > 0
+                    ? $"Booking for {facility.Name} + equipment rental"
+                    : $"Booking for {facility.Name}",
                 DueAt = booking.PaymentHoldExpiresAt,
                 PaidAt = amount == 0 ? DateTime.UtcNow : null
             };
@@ -287,6 +340,7 @@ public class BookingService
             .Include(b => b.Facility)
             .Include(b => b.Guests)
             .Include(b => b.Invoice)
+            .Include(b => b.EquipmentRentals)
             .FirstOrDefaultAsync(b => b.Id == bookingId, ct);
 
         if (booking is null)
@@ -365,12 +419,24 @@ public class BookingService
         var hours = (decimal)(endUtc - startUtc).TotalHours;
         var baseAmount = Math.Round(facility.HourlyRate * hours, 2);
         var discount = Math.Round(baseAmount * (subscription.MembershipPlan.DiscountPercent / 100m), 2);
-        var amount = Math.Max(0, baseAmount - discount);
+        var facilityAmount = Math.Max(0, baseAmount - discount);
 
         booking.StartUtc = startUtc;
         booking.EndUtc = endUtc;
-        booking.Amount = amount;
         booking.Notes = notes;
+
+        // Reprice active equipment for the new window at full rate (no member discount).
+        decimal equipmentTotal = 0m;
+        foreach (var rental in booking.EquipmentRentals.Where(r => r.Status == EquipmentRentalStatus.Active))
+        {
+            rental.StartUtc = startUtc;
+            rental.DueUtc = endUtc;
+            rental.Fee = EquipmentPricing.CalculateFee(rental.Quantity, startUtc, endUtc);
+            equipmentTotal += rental.Fee;
+        }
+
+        var amount = Math.Round(facilityAmount + equipmentTotal, 2);
+        booking.Amount = amount;
 
         _db.BookingGuests.RemoveRange(booking.Guests);
         foreach (var guestInput in guestList)
@@ -396,7 +462,9 @@ public class BookingService
         if (booking.Invoice is not null && booking.Invoice.Status == InvoiceStatus.Unpaid)
         {
             booking.Invoice.Amount = amount;
-            booking.Invoice.Description = $"Booking for {facility.Name}";
+            booking.Invoice.Description = equipmentTotal > 0
+                ? $"Booking for {facility.Name} + equipment rental"
+                : $"Booking for {facility.Name}";
         }
 
         _db.AuditLogs.Add(new AuditLog

@@ -10,9 +10,26 @@
             <p class="muted mb-0">@Model.Facility?.Name · @Model.StartUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm") – @Model.EndUtc.ToLocalTime().ToString("HH:mm")</p>
         </div>
         <div class="panel">
+            @{
+                var chargedEquipment = Model.EquipmentRentals
+                    .Where(r => r.Status != EquipmentRentalStatus.Cancelled)
+                    .ToList();
+                var equipmentTotal = chargedEquipment.Sum(r => r.Fee);
+                var facilityPortion = Math.Max(0, Model.Amount - equipmentTotal);
+            }
             <div class="row g-3">
                 <div class="col-md-4"><strong>Status</strong><div><span class="badge-soft">@Model.Status</span></div></div>
-                <div class="col-md-4"><strong>Amount</strong><div>MYR @Model.Amount.ToString("N2")</div></div>
+                <div class="col-md-4">
+                    <strong>Amount</strong>
+                    <div>MYR @Model.Amount.ToString("N2")</div>
+                    @if (equipmentTotal > 0)
+                    {
+                        <div class="small muted mt-1">
+                            Facility MYR @facilityPortion.ToString("N2")
+                            + equipment MYR @equipmentTotal.ToString("N2")
+                        </div>
+                    }
+                </div>
                 <div class="col-md-4"><strong>Hold expires</strong><div>@(Model.PaymentHoldExpiresAt?.ToLocalTime().ToString("dd MMM HH:mm") ?? "—")</div></div>
             </div>
             <hr />
@@ -37,6 +54,7 @@
                                 @(rental.InventoryItem?.Name ?? "Equipment") × @rental.Quantity
                             </a>
                             · MYR @rental.Fee.ToString("N2")
+                            <span class="small muted">(full price)</span>
                             ·
                             @if (rental.Status == EquipmentRentalStatus.Active)
                             {
