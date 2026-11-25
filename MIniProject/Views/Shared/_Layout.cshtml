@@ -39,41 +39,42 @@
             <nav class="site-drawer site-drawer--desktop" id="siteDrawerDesktop" aria-label="Primary">
                 <div class="site-drawer__panel">
                     <ul class="navbar-nav site-nav__links">
-                        <li class="nav-item"><a class="nav-link" asp-controller="Facilities" asp-action="Index">Facilities</a></li>
-                        @if (SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Administrator))
+                        @* Admin chrome: hide Facilities / Membership / Contact / My Dashboard / Staff dashboard *@
+                        @if (!(SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Administrator)))
                         {
-                            <li class="nav-item"><a class="nav-link" asp-controller="Admin" asp-action="Index" asp-route-tab="membership">Membership</a></li>
-                        }
-                        else if (SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Staff))
-                        {
-                            <li class="nav-item"><a class="nav-link" asp-controller="Staff" asp-action="Membership">Membership</a></li>
-                        }
-                        else if (SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Member))
-                        {
-                            <li class="nav-item"><a class="nav-link" asp-controller="Membership" asp-action="Manage">Membership</a></li>
-                        }
-                        else
-                        {
-                            <li class="nav-item"><a class="nav-link" asp-controller="Membership" asp-action="Plans">Membership</a></li>
+                            <li class="nav-item"><a class="nav-link" asp-controller="Facilities" asp-action="Index">Facilities</a></li>
+                            @if (SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Staff))
+                            {
+                                <li class="nav-item"><a class="nav-link" asp-controller="Staff" asp-action="Membership">Membership</a></li>
+                            }
+                            else if (SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Member))
+                            {
+                                <li class="nav-item"><a class="nav-link" asp-controller="Membership" asp-action="Manage">Membership</a></li>
+                            }
+                            else
+                            {
+                                <li class="nav-item"><a class="nav-link" asp-controller="Membership" asp-action="Plans">Membership</a></li>
+                            }
+                            <li class="nav-item"><a class="nav-link" asp-controller="Home" asp-action="Contact">Contact</a></li>
                         }
                         @if (SignInManager.IsSignedIn(User) && (User.IsInRole(AppRoles.Member) || User.IsInRole(AppRoles.Staff) || User.IsInRole(AppRoles.Administrator)))
                         {
                             <li class="nav-item"><a class="nav-link" asp-controller="EquipmentRentals" asp-action="Index">Equipment rentals</a></li>
                         }
-                        <li class="nav-item"><a class="nav-link" asp-controller="Home" asp-action="Contact">Contact</a></li>
                         @if (SignInManager.IsSignedIn(User))
                         {
-                            @if (User.IsInRole(AppRoles.Member) || User.IsInRole(AppRoles.Administrator))
+                            @if (User.IsInRole(AppRoles.Member) && !User.IsInRole(AppRoles.Administrator))
                             {
                                 <li class="nav-item"><a class="nav-link" asp-controller="Member" asp-action="Dashboard">My Dashboard</a></li>
                             }
-                            @if (User.IsInRole(AppRoles.Staff) || User.IsInRole(AppRoles.Administrator))
+                            @if (User.IsInRole(AppRoles.Staff) && !User.IsInRole(AppRoles.Administrator))
                             {
                                 <li class="nav-item"><a class="nav-link" asp-controller="Staff" asp-action="Index">Staff</a></li>
                                 <li class="nav-item"><a class="nav-link" asp-controller="Staff" asp-action="CheckIn">Staff operations &amp; check-in</a></li>
                             }
                             @if (User.IsInRole(AppRoles.Administrator))
                             {
+                                <li class="nav-item"><a class="nav-link" asp-controller="Staff" asp-action="CheckIn">Staff operations &amp; check-in</a></li>
                                 <li class="nav-item"><a class="nav-link" asp-controller="Admin" asp-action="Index">Admin governance</a></li>
                                 <li class="nav-item"><a class="nav-link" asp-controller="Reports" asp-action="Index">Reports &amp; analytics</a></li>
                             }
@@ -128,41 +129,41 @@
 
             <div class="site-drawer__section-label">Menu</div>
             <ul class="navbar-nav site-nav__links">
-                <li class="nav-item"><a class="nav-link" asp-controller="Facilities" asp-action="Index">Facilities</a></li>
-                @if (SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Administrator))
+                @if (!(SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Administrator)))
                 {
-                    <li class="nav-item"><a class="nav-link" asp-controller="Admin" asp-action="Index" asp-route-tab="membership">Membership</a></li>
-                }
-                else if (SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Staff))
-                {
-                    <li class="nav-item"><a class="nav-link" asp-controller="Staff" asp-action="Membership">Membership</a></li>
-                }
-                else if (SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Member))
-                {
-                    <li class="nav-item"><a class="nav-link" asp-controller="Membership" asp-action="Manage">Membership</a></li>
-                }
-                else
-                {
-                    <li class="nav-item"><a class="nav-link" asp-controller="Membership" asp-action="Plans">Membership</a></li>
+                    <li class="nav-item"><a class="nav-link" asp-controller="Facilities" asp-action="Index">Facilities</a></li>
+                    @if (SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Staff))
+                    {
+                        <li class="nav-item"><a class="nav-link" asp-controller="Staff" asp-action="Membership">Membership</a></li>
+                    }
+                    else if (SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Member))
+                    {
+                        <li class="nav-item"><a class="nav-link" asp-controller="Membership" asp-action="Manage">Membership</a></li>
+                    }
+                    else
+                    {
+                        <li class="nav-item"><a class="nav-link" asp-controller="Membership" asp-action="Plans">Membership</a></li>
+                    }
+                    <li class="nav-item"><a class="nav-link" asp-controller="Home" asp-action="Contact">Contact</a></li>
                 }
                 @if (SignInManager.IsSignedIn(User) && (User.IsInRole(AppRoles.Member) || User.IsInRole(AppRoles.Staff) || User.IsInRole(AppRoles.Administrator)))
                 {
                     <li class="nav-item"><a class="nav-link" asp-controller="EquipmentRentals" asp-action="Index">Equipment rentals</a></li>
                 }
-                <li class="nav-item"><a class="nav-link" asp-controller="Home" asp-action="Contact">Contact</a></li>
                 @if (SignInManager.IsSignedIn(User))
                 {
-                    @if (User.IsInRole(AppRoles.Member) || User.IsInRole(AppRoles.Administrator))
+                    @if (User.IsInRole(AppRoles.Member) && !User.IsInRole(AppRoles.Administrator))
                     {
                         <li class="nav-item"><a class="nav-link" asp-controller="Member" asp-action="Dashboard">My Dashboard</a></li>
                     }
-                    @if (User.IsInRole(AppRoles.Staff) || User.IsInRole(AppRoles.Administrator))
+                    @if (User.IsInRole(AppRoles.Staff) && !User.IsInRole(AppRoles.Administrator))
                     {
                         <li class="nav-item"><a class="nav-link" asp-controller="Staff" asp-action="Index">Staff</a></li>
                         <li class="nav-item"><a class="nav-link" asp-controller="Staff" asp-action="CheckIn">Staff operations &amp; check-in</a></li>
                     }
                     @if (User.IsInRole(AppRoles.Administrator))
                     {
+                        <li class="nav-item"><a class="nav-link" asp-controller="Staff" asp-action="CheckIn">Staff operations &amp; check-in</a></li>
                         <li class="nav-item"><a class="nav-link" asp-controller="Admin" asp-action="Index">Admin governance</a></li>
                         <li class="nav-item"><a class="nav-link" asp-controller="Reports" asp-action="Index">Reports &amp; analytics</a></li>
                     }
