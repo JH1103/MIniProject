@@ -1485,6 +1485,25 @@ body.nav-open .nav-toggle__bar:nth-child(3) {
   display: grid;
   gap: 0.15rem;
 }
+.review-equipment-lines {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+}
+.review-equipment-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: baseline;
+  font-size: 0.95rem;
+}
+.review-total {
+  padding-top: 0.35rem;
+  border-top: 1px dashed var(--card-line);
+}
+.review-total strong {
+  font-size: 1.15rem;
+}
 
 .back-to-top {
   position: fixed;

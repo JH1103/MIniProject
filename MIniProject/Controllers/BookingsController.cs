@@ -90,7 +90,8 @@ public class BookingsController : Controller
                     Id = i.Id,
                     Name = i.Name,
                     Quantity = i.Quantity,
-                    Condition = i.Condition.ToString()
+                    Condition = i.Condition.ToString(),
+                    DailyFee = EquipmentPricing.FeePerUnitPerDay
                 }).ToList(),
             Guests = Enumerable.Range(0, Math.Min(subscription.MembershipPlan.MaxGuestsPerBooking, 4))
                 .Select(_ => new GuestInputModel())
@@ -140,17 +141,13 @@ public class BookingsController : Controller
             endLocal,
             model.Guests.Select(g => (g.FullName ?? string.Empty, g.IdentificationNumber, g.Phone)),
             notes,
-            model.IsRecurring);
+            model.IsRecurring,
+            selectedEquipmentIds);
 
         if (!ok || booking is null)
         {
             TempData["Error"] = error ?? "Unable to create booking.";
             return RedirectToAction(nameof(Create), new { facilityId = model.FacilityId, date = model.Date.ToString("yyyy-MM-dd"), start = model.SlotStart, end = model.SlotEnd });
-        }
-
-        if (selectedEquipmentIds.Count > 0)
-        {
-            await CreateBookingEquipmentRentalsAsync(booking, selectedEquipmentIds);
         }
 
         TempData["Success"] = facility.BookingMode == BookingMode.ApprovalRequired
@@ -409,55 +406,4 @@ public class BookingsController : Controller
         return RedirectToAction("Details", "Facilities", new { id = facilityId, date = date.ToString("yyyy-MM-dd") });
     }
 
-    private const decimal FeePerUnitPerDay = 15m;
-
-    private async Task CreateBookingEquipmentRentalsAsync(Booking booking, List<int> inventoryItemIds)
-    {
-        var items = await _db.InventoryItems
-            .Where(i =>
-                inventoryItemIds.Contains(i.Id) &&
-                i.FacilityId == booking.FacilityId &&
-                i.Condition != InventoryCondition.Retired)
-            .ToListAsync();
-
-        if (items.Count == 0)
-        {
-            return;
-        }
-
-        var days = Math.Max(1, (int)Math.Ceiling((booking.EndUtc - booking.StartUtc).TotalDays));
-        var names = new List<string>();
-
-        foreach (var item in items)
-        {
-            if (item.Quantity < 1)
-            {
-                continue;
-            }
-
-            item.Quantity -= 1;
-            names.Add(item.Name);
-            _db.EquipmentRentals.Add(new EquipmentRental
-            {
-                MemberId = booking.MemberId,
-                InventoryItemId = item.Id,
-                BookingId = booking.Id,
-                Quantity = 1,
-                StartUtc = booking.StartUtc,
-                DueUtc = booking.EndUtc,
-                Status = EquipmentRentalStatus.Active,
-                Fee = Math.Round(FeePerUnitPerDay * days, 2),
-                Notes = $"Rented with booking #{booking.Id}"
-            });
-        }
-
-        if (names.Count > 0)
-        {
-            var equipmentNote = "Equipment: " + string.Join(", ", names);
-            booking.Notes = string.IsNullOrWhiteSpace(booking.Notes)
-                ? equipmentNote
-                : $"{booking.Notes}\n{equipmentNote}";
-            await _db.SaveChangesAsync();
-        }
-    }
 }

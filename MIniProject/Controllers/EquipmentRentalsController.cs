@@ -13,8 +13,6 @@ namespace MIniProject.Controllers;
 [Authorize]
 public class EquipmentRentalsController : Controller
 {
-    private const decimal FeePerUnitPerDay = 15m;
-
     private readonly ApplicationDbContext _db;
     private readonly BookingService _bookingService;
     private readonly UserManager<ApplicationUser> _userManager;
@@ -175,8 +173,7 @@ public class EquipmentRentalsController : Controller
             return View(await BuildFormAsync(user.Id, model));
         }
 
-        var days = Math.Max(1, (int)Math.Ceiling((dueUtc - startUtc).TotalDays));
-        var fee = Math.Round(FeePerUnitPerDay * model.Quantity * days, 2);
+        var fee = EquipmentPricing.CalculateFee(model.Quantity, startUtc, dueUtc);
 
         item.Quantity -= model.Quantity;
         _db.EquipmentRentals.Add(new EquipmentRental
@@ -197,6 +194,13 @@ public class EquipmentRentalsController : Controller
                         .Select(i => i.Name))
                 : model.Notes
         });
+
+        // Equipment is always full price; roll into unpaid booking/invoice totals.
+        if (linkedBooking is not null)
+        {
+            await ApplyEquipmentFeeToBookingAsync(linkedBooking.Id, fee);
+        }
+
         await _db.SaveChangesAsync();
 
         TempData["Success"] = $"Rental created for {item.Name} (MYR {fee:N2}).";
@@ -324,14 +328,29 @@ public class EquipmentRentalsController : Controller
         }
 
         item.Quantity -= model.Quantity;
-        var days = Math.Max(1, (int)Math.Ceiling((dueUtc - startUtc).TotalDays));
+        var previousFee = rental.Fee;
+        var previousBookingId = rental.BookingId;
         rental.InventoryItemId = item.Id;
         rental.Quantity = model.Quantity;
         rental.StartUtc = startUtc;
         rental.DueUtc = dueUtc;
         rental.BookingId = model.BookingId;
         rental.Notes = model.Notes;
-        rental.Fee = Math.Round(FeePerUnitPerDay * model.Quantity * days, 2);
+        rental.Fee = EquipmentPricing.CalculateFee(model.Quantity, startUtc, dueUtc);
+
+        if (previousBookingId is int oldBookingId && oldBookingId != model.BookingId)
+        {
+            await ApplyEquipmentFeeToBookingAsync(oldBookingId, -previousFee);
+        }
+        else if (previousBookingId is int sameBookingId)
+        {
+            await ApplyEquipmentFeeToBookingAsync(sameBookingId, rental.Fee - previousFee);
+        }
+
+        if (model.BookingId is int newBookingId && newBookingId != previousBookingId)
+        {
+            await ApplyEquipmentFeeToBookingAsync(newBookingId, rental.Fee);
+        }
         if (User.IsInRole(AppRoles.Staff) || User.IsInRole(AppRoles.Administrator))
         {
             // Staff cannot mark Cancelled-booking rentals Active via status override.
@@ -640,6 +659,39 @@ public class EquipmentRentalsController : Controller
         }
 
         return model;
+    }
+
+    /// <summary>
+    /// Adds (or subtracts) equipment fees on an unpaid booking/invoice.
+    /// Member facility discount is never applied to equipment.
+    /// </summary>
+    private async Task ApplyEquipmentFeeToBookingAsync(int bookingId, decimal feeDelta)
+    {
+        if (feeDelta == 0)
+        {
+            return;
+        }
+
+        var booking = await _db.Bookings
+            .Include(b => b.Invoice)
+            .FirstOrDefaultAsync(b => b.Id == bookingId);
+        if (booking is null)
+        {
+            return;
+        }
+
+        if (booking.Status is BookingStatus.Cancelled or BookingStatus.Completed or BookingStatus.NoShow)
+        {
+            return;
+        }
+
+        booking.Amount = Math.Max(0, Math.Round(booking.Amount + feeDelta, 2));
+
+        if (booking.Invoice is not null &&
+            booking.Invoice.Status is InvoiceStatus.Unpaid or InvoiceStatus.Overdue)
+        {
+            booking.Invoice.Amount = booking.Amount;
+        }
     }
 
     private static void ApplyBookingSchedule(EquipmentRentalFormViewModel model, Booking booking)
