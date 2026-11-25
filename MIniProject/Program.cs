@@ -23,12 +23,23 @@ builder.Services
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddDefaultTokenProviders();
 
+var emailSection = builder.Configuration.GetSection(EmailOptions.SectionName);
+builder.Services.Configure<EmailOptions>(emailSection);
+var resetLinkHours = emailSection.GetValue("ResetLinkExpiryHours", 1);
+builder.Services.Configure<DataProtectionTokenProviderOptions>(options =>
+{
+    options.TokenLifespan = TimeSpan.FromHours(Math.Max(1, resetLinkHours));
+});
+
 builder.Services.ConfigureApplicationCookie(options =>
 {
     options.LoginPath = "/Account/Login";
     options.AccessDeniedPath = "/Account/AccessDenied";
 });
 
+builder.Services.AddSingleton<IAppEmailSender, ConfigurableEmailSender>();
+builder.Services.AddScoped<PasswordResetService>();
+builder.Services.AddScoped<BookingNotificationService>();
 builder.Services.AddScoped<BookingService>();
 builder.Services.AddScoped<PaymentService>();
 builder.Services.AddScoped<ReportService>();

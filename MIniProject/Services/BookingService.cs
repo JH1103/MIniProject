@@ -7,10 +7,12 @@ namespace MIniProject.Services;
 public class BookingService
 {
     private readonly ApplicationDbContext _db;
+    private readonly BookingNotificationService _notifications;
 
-    public BookingService(ApplicationDbContext db)
+    public BookingService(ApplicationDbContext db, BookingNotificationService notifications)
     {
         _db = db;
+        _notifications = notifications;
     }
 
     public async Task ReleaseExpiredHoldsAsync(CancellationToken ct = default)
@@ -322,6 +324,11 @@ public class BookingService
         await _db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
+        if (booking.Status == BookingStatus.Confirmed)
+        {
+            await _notifications.SendConfirmationAsync(booking.Id, ct);
+        }
+
         return (true, null, booking);
     }
 
@@ -519,6 +526,12 @@ public class BookingService
         }
 
         await _db.SaveChangesAsync(ct);
+
+        if (booking.Status == BookingStatus.Confirmed)
+        {
+            await _notifications.SendConfirmationAsync(booking.Id, ct);
+        }
+
         return (true, null);
     }
 

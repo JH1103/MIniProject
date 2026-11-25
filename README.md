@@ -60,6 +60,21 @@ dotnet run --launch-profile http
 
 Data is stored in SQLite: `MIniProject/clubhouse.db`.
 
+## Email (password reset & booking confirmation)
+
+Configure the `Email` section in `appsettings.json` / user secrets / environment variables. Leave `Email:Smtp:Host` empty for local/dev: messages are written as text files under `MIniProject/App_Data/emails/` (see logs for the path). Do not commit real SMTP credentials.
+
+| Setting | Purpose |
+|---------|---------|
+| `Email:Smtp:Host` / `Port` / `EnableSsl` | SMTP server |
+| `Email:Smtp:UserName` / `Password` | Optional SMTP auth (use secrets, not source control) |
+| `Email:FromAddress` / `FromName` | From header |
+| `Email:OtpExpiryMinutes` | Forgot-password OTP lifetime (default 15) |
+| `Email:ResetLinkExpiryHours` | Reset-link token lifetime (default 1) |
+| `Email:FallbackDirectory` | Local file fallback when SMTP is unset |
+
+Forgot password sends both a 6-digit OTP and a reset link. Booking confirmation emails go out when a booking reaches **Confirmed** (free instant confirm, paid after payment, or zero-amount after staff approval).
+
 ## Reference
 
 Club information based on [kotapermai.com.my](https://www.kotapermai.com.my/).

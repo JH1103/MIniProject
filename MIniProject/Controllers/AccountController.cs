@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using MIniProject.Models;
+using MIniProject.Services;
 using MIniProject.ViewModels;
 
 namespace MIniProject.Controllers;
@@ -10,11 +11,16 @@ public class AccountController : Controller
 {
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly SignInManager<ApplicationUser> _signInManager;
+    private readonly PasswordResetService _passwordResetService;
 
-    public AccountController(UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager)
+    public AccountController(
+        UserManager<ApplicationUser> userManager,
+        SignInManager<ApplicationUser> signInManager,
+        PasswordResetService passwordResetService)
     {
         _userManager = userManager;
         _signInManager = signInManager;
+        _passwordResetService = passwordResetService;
     }
 
     [HttpGet]
@@ -124,11 +130,60 @@ public class AccountController : Controller
             return View(model);
         }
 
-        var user = await _userManager.FindByEmailAsync(model.Email);
-        // Always show success to avoid account enumeration in this demo.
-        TempData["Success"] = user is null
-            ? "If an account exists for that email, password reset instructions would be sent."
-            : $"Demo reset: sign in with your current password, or contact admin. Account found for {user.Email}.";
+        var resetUrl = Url.Action(
+            nameof(ResetPassword),
+            "Account",
+            values: null,
+            protocol: Request.Scheme)!;
+
+        await _passwordResetService.RequestResetAsync(model.Email, resetUrl);
+
+        return RedirectToAction(nameof(ForgotPasswordConfirmation));
+    }
+
+    [HttpGet]
+    public IActionResult ForgotPasswordConfirmation() => View();
+
+    [HttpGet]
+    public IActionResult ResetPassword(string? email = null, string? token = null)
+    {
+        return View(new ResetPasswordViewModel
+        {
+            Email = email ?? string.Empty,
+            Token = token
+        });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> ResetPassword(ResetPasswordViewModel model)
+    {
+        if (!model.HasLinkToken && string.IsNullOrWhiteSpace(model.Otp))
+        {
+            ModelState.AddModelError(nameof(model.Otp), "Enter the 6-digit OTP from your email, or use the reset link.");
+        }
+
+        if (!ModelState.IsValid)
+        {
+            return View(model);
+        }
+
+        (bool Ok, string? Error) result;
+        if (model.HasLinkToken)
+        {
+            result = await _passwordResetService.ResetWithTokenAsync(model.Email, model.Token!, model.Password);
+        }
+        else
+        {
+            result = await _passwordResetService.ResetWithOtpAsync(model.Email, model.Otp!, model.Password);
+        }
+
+        if (!result.Ok)
+        {
+            ModelState.AddModelError(string.Empty, result.Error ?? "Unable to reset password.");
+            return View(model);
+        }
+
+        TempData["Success"] = "Your password has been updated. You can sign in with your new password.";
         return RedirectToAction(nameof(Login));
     }
 

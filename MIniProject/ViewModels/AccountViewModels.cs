@@ -61,3 +61,31 @@ public class ForgotPasswordViewModel
     [Required, EmailAddress]
     public string Email { get; set; } = string.Empty;
 }
+
+public class ResetPasswordViewModel
+{
+    [Required, EmailAddress]
+    [Display(Name = "Email")]
+    public string Email { get; set; } = string.Empty;
+
+    /// <summary>Base64url-encoded Identity reset token from the email link (optional if OTP is used).</summary>
+    public string? Token { get; set; }
+
+    [Display(Name = "One-time code (OTP)")]
+    [RegularExpression(@"^$|^\d{6}$", ErrorMessage = "OTP must be 6 digits.")]
+    public string? Otp { get; set; }
+
+    [Required, DataType(DataType.Password)]
+    [MinLength(8, ErrorMessage = "Password must be at least 8 characters.")]
+    [RegularExpression(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$",
+        ErrorMessage = "Password must include uppercase, lowercase and a number.")]
+    [Display(Name = "New password")]
+    public string Password { get; set; } = string.Empty;
+
+    [Required, DataType(DataType.Password)]
+    [Compare(nameof(Password), ErrorMessage = "Password and confirmation do not match.")]
+    [Display(Name = "Confirm new password")]
+    public string ConfirmPassword { get; set; } = string.Empty;
+
+    public bool HasLinkToken => !string.IsNullOrWhiteSpace(Token);
+}
