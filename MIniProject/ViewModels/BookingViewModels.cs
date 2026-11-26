@@ -71,6 +71,7 @@ public class MemberDashboardViewModel
     public ApplicationUser User { get; set; } = null!;
     public Subscription? Subscription { get; set; }
     public List<Booking> UpcomingBookings { get; set; } = [];
+    public List<Booking> BookingHistory { get; set; } = [];
     public List<EquipmentRental> EquipmentRentals { get; set; } = [];
     public List<Invoice> Invoices { get; set; } = [];
     public List<VisitorPass> Passes { get; set; } = [];

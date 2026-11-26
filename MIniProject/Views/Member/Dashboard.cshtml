@@ -133,6 +133,35 @@
                         </div>
                     }
                 </div>
+
+                <div class="panel mt-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h3 class="h5 mb-0">Booking history</h3>
+                    </div>
+                    @if (!Model.BookingHistory.Any())
+                    {
+                        <p class="muted mb-0">No past, completed, or cancelled bookings yet.</p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table mb-0">
+                                <thead><tr><th>Facility</th><th>When</th><th>Status</th><th></th></tr></thead>
+                                <tbody>
+                                @foreach (var booking in Model.BookingHistory)
+                                {
+                                    <tr>
+                                        <td>@booking.Facility?.Name</td>
+                                        <td>@booking.StartUtc.ToLocalTime().ToString("dd MMM HH:mm")</td>
+                                        <td><span class="badge-soft">@booking.Status</span></td>
+                                        <td><a asp-controller="Bookings" asp-action="Details" asp-route-id="@booking.Id">View</a></td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
             </div>
             <div class="col-lg-5">
                 <div class="panel mb-3">
