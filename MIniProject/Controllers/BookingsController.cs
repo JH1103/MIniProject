@@ -134,7 +134,7 @@ public class BookingsController : Controller
         var notes = model.Notes?.Trim();
         var selectedEquipmentIds = model.SelectedEquipmentIds.Where(id => id > 0).Distinct().ToList();
 
-        var (ok, error, booking) = await _bookingService.CreateBookingAsync(
+        var (ok, error, booking, emailWarning) = await _bookingService.CreateBookingAsync(
             user.Id,
             model.FacilityId,
             startLocal,
@@ -150,9 +150,23 @@ public class BookingsController : Controller
             return RedirectToAction(nameof(Create), new { facilityId = model.FacilityId, date = model.Date.ToString("yyyy-MM-dd"), start = model.SlotStart, end = model.SlotEnd });
         }
 
-        TempData["Success"] = facility.BookingMode == BookingMode.ApprovalRequired
-            ? "Booking submitted and awaiting staff approval."
-            : "Booking held. Please complete payment to confirm.";
+        if (booking.Status == BookingStatus.Confirmed)
+        {
+            TempData["Success"] = "Booking confirmed. A confirmation email has been sent to your account email.";
+        }
+        else if (facility.BookingMode == BookingMode.ApprovalRequired)
+        {
+            TempData["Success"] = "Booking submitted and awaiting staff approval.";
+        }
+        else
+        {
+            TempData["Success"] = "Booking held. Please complete payment to confirm — you will receive a confirmation email after payment.";
+        }
+
+        if (!string.IsNullOrWhiteSpace(emailWarning))
+        {
+            TempData["Warning"] = emailWarning;
+        }
 
         var invoice = await _db.Invoices.FirstOrDefaultAsync(i => i.BookingId == booking.Id);
         if (invoice is not null && invoice.Status == InvoiceStatus.Unpaid)

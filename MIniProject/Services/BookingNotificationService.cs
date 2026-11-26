@@ -20,9 +20,16 @@ public class BookingNotificationService
         _logger = logger;
     }
 
-    public async Task SendConfirmationAsync(int bookingId, CancellationToken ct = default)
+    /// <summary>
+    /// Sends the member booking confirmation email when the booking is <see cref="BookingStatus.Confirmed"/>
+    /// (after free instant confirm, successful payment, or zero-amount staff approval).
+    /// Returns a result so callers can surface SMTP failures instead of failing silently.
+    /// </summary>
+    public async Task<EmailSendResult> SendConfirmationAsync(int bookingId, CancellationToken ct = default)
     {
+        // AsNoTracking avoids stale tracked graphs (e.g. payment path loaded Booking without Member).
         var booking = await _db.Bookings
+            .AsNoTracking()
             .Include(b => b.Facility)
             .Include(b => b.Member)
             .Include(b => b.Invoice)
@@ -31,20 +38,24 @@ public class BookingNotificationService
         if (booking is null)
         {
             _logger.LogWarning("Booking confirmation email skipped: booking {Id} not found.", bookingId);
-            return;
+            return EmailSendResult.Failed("Booking was not found; confirmation email was not sent.");
         }
 
         if (booking.Status != BookingStatus.Confirmed)
         {
-            _logger.LogDebug("Booking confirmation email skipped: booking {Id} status is {Status}.", bookingId, booking.Status);
-            return;
+            _logger.LogDebug(
+                "Booking confirmation email skipped: booking {Id} status is {Status} (only Confirmed sends).",
+                bookingId,
+                booking.Status);
+            return EmailSendResult.Failed(
+                $"Booking is {booking.Status}; confirmation email is only sent when status is Confirmed.");
         }
 
         var member = booking.Member;
         if (member is null || string.IsNullOrWhiteSpace(member.Email))
         {
             _logger.LogWarning("Booking confirmation email skipped: member email missing for booking {Id}.", bookingId);
-            return;
+            return EmailSendResult.Failed("Member email is missing; confirmation email was not sent.");
         }
 
         var startLocal = booking.StartUtc.ToLocalTime();
@@ -73,7 +84,7 @@ public class BookingNotificationService
         {
             var result = await _emailSender.SendAsync(
                 member.Email,
-                $"Booking confirmed — {facility}",
+                $"Booking confirmed - {facility}",
                 body.TrimEnd() + "\n",
                 ct);
 
@@ -84,7 +95,7 @@ public class BookingNotificationService
                     bookingId,
                     member.Email,
                     result.ErrorMessage);
-                return;
+                return result;
             }
 
             _logger.LogInformation(
@@ -92,10 +103,13 @@ public class BookingNotificationService
                 bookingId,
                 result.Mode,
                 member.Email);
+            return result;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to send booking confirmation for booking {Id}.", bookingId);
+            return EmailSendResult.Failed(
+                "We could not send the booking confirmation email. Please contact the clubhouse if you need a copy.");
         }
     }
 }

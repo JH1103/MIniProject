@@ -91,14 +91,21 @@ public class PaymentsController : Controller
         var last4 = digits[^4..];
         var method = $"Card ending {last4}";
 
-        var (ok, error) = await _paymentService.PayInvoiceAsync(model.InvoiceId, user.Id, method);
+        var (ok, error, emailWarning) = await _paymentService.PayInvoiceAsync(model.InvoiceId, user.Id, method);
         if (!ok)
         {
             TempData["Error"] = error;
             return RedirectToAction(nameof(Pay), new { id = model.InvoiceId });
         }
 
-        TempData["Success"] = "Card payment successful. A confirmation receipt is available in your history.";
+        TempData["Success"] = invoice!.BookingId is not null
+            ? "Card payment successful. Your booking is confirmed and a confirmation email has been sent."
+            : "Card payment successful. A confirmation receipt is available in your history.";
+        if (!string.IsNullOrWhiteSpace(emailWarning))
+        {
+            TempData["Warning"] = emailWarning;
+        }
+
         return RedirectToAction(nameof(Receipt), new { id = model.InvoiceId });
     }
 
@@ -143,20 +150,27 @@ public class PaymentsController : Controller
             return Challenge();
         }
 
-        var (result, _) = await TryGetAuthorizedInvoiceAsync(id);
-        if (result is not null)
+        var (authResult, invoice) = await TryGetAuthorizedInvoiceAsync(id);
+        if (authResult is not null)
         {
-            return result;
+            return authResult;
         }
 
-        var (ok, error) = await _paymentService.PayInvoiceAsync(id, user.Id, "E-Wallet");
+        var (ok, error, emailWarning) = await _paymentService.PayInvoiceAsync(id, user.Id, "E-Wallet");
         if (!ok)
         {
             TempData["Error"] = error;
             return RedirectToAction(nameof(PayEWallet), new { id });
         }
 
-        TempData["Success"] = "E-wallet payment successful. A confirmation receipt is available in your history.";
+        TempData["Success"] = invoice!.BookingId is not null
+            ? "E-wallet payment successful. Your booking is confirmed and a confirmation email has been sent."
+            : "E-wallet payment successful. A confirmation receipt is available in your history.";
+        if (!string.IsNullOrWhiteSpace(emailWarning))
+        {
+            TempData["Warning"] = emailWarning;
+        }
+
         return RedirectToAction(nameof(Receipt), new { id });
     }
 

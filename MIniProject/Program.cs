@@ -25,6 +25,16 @@ builder.Services
 
 var emailSection = builder.Configuration.GetSection(EmailOptions.SectionName);
 builder.Services.Configure<EmailOptions>(emailSection);
+builder.Services.PostConfigure<EmailOptions>(options =>
+{
+    // Accept Email:FromEmail as an alias when FromAddress was left at the shipped .local default.
+    if (!string.IsNullOrWhiteSpace(options.FromEmail) &&
+        (string.IsNullOrWhiteSpace(options.FromAddress) ||
+         string.Equals(options.FromAddress, EmailOptions.DefaultLocalFromAddress, StringComparison.OrdinalIgnoreCase)))
+    {
+        options.FromAddress = options.FromEmail.Trim();
+    }
+});
 var resetLinkHours = emailSection.GetValue("ResetLinkExpiryHours", 1);
 builder.Services.Configure<DataProtectionTokenProviderOptions>(options =>
 {
@@ -48,6 +58,8 @@ builder.Services.AddControllersWithViews();
 
 var app = builder.Build();
 
+LogEmailOptions(app);
+
 await DbSeeder.SeedAsync(app.Services);
 
 if (!app.Environment.IsDevelopment())
@@ -68,3 +80,36 @@ app.MapControllerRoute(
     .WithStaticAssets();
 
 app.Run();
+
+static void LogEmailOptions(WebApplication app)
+{
+    var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("EmailStartup");
+    var options = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<EmailOptions>>().Value;
+    var resolvedFrom = options.ResolveFromAddress();
+    var host = string.IsNullOrWhiteSpace(options.Smtp.Host) ? "(empty)" : options.Smtp.Host;
+    var userSet = !string.IsNullOrWhiteSpace(options.Smtp.UserName);
+
+    logger.LogInformation(
+        "Email options bound: Enabled={Enabled}, FromAddress={FromAddress}, ResolvedFrom={ResolvedFrom}, SmtpHost={Host}, SmtpPort={Port}, SmtpUserSet={UserSet}, AllowFileFallback={Fallback}",
+        options.Enabled,
+        options.FromAddress,
+        resolvedFrom,
+        host,
+        options.Smtp.Port,
+        userSet,
+        options.AllowFileFallback);
+
+    if (options.IsSmtpConfigured &&
+        string.Equals(resolvedFrom, EmailOptions.DefaultLocalFromAddress, StringComparison.OrdinalIgnoreCase))
+    {
+        logger.LogWarning(
+            "Email:FromAddress is still the default .local placeholder while SMTP Host is configured. " +
+            "Set user secret Email:FromAddress (or Email:FromEmail) to your SMTP mailbox — for Gmail, use the same value as Email:Smtp:UserName.");
+    }
+    else if (!options.IsSmtpConfigured)
+    {
+        logger.LogWarning(
+            "Email:Smtp:Host is empty. Password reset and booking confirmation will not reach real inboxes " +
+            "(Development may write App_Data/emails when AllowFileFallback is true).");
+    }
+}

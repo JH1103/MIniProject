@@ -4,6 +4,9 @@ public class EmailOptions
 {
     public const string SectionName = "Email";
 
+    /// <summary>Placeholder FromAddress shipped in appsettings.json (not valid for real SMTP providers).</summary>
+    public const string DefaultLocalFromAddress = "noreply@kotapermai.local";
+
     /// <summary>
     /// Master switch. When false, sends fail with a clear error (no silent success).
     /// </summary>
@@ -11,7 +14,17 @@ public class EmailOptions
 
     public string FromName { get; set; } = "Kota Permai Clubhouse";
 
-    public string FromAddress { get; set; } = "noreply@kotapermai.local";
+    /// <summary>
+    /// Bound from <c>Email:FromAddress</c> / <c>Email__FromAddress</c> (user secrets or env).
+    /// For Gmail, this must be the authenticated mailbox (or a verified Send As alias).
+    /// </summary>
+    public string FromAddress { get; set; } = DefaultLocalFromAddress;
+
+    /// <summary>
+    /// Alternate key some setups use by mistake (<c>Email:FromEmail</c>).
+    /// When set, it is applied as <see cref="FromAddress"/> during options post-configure.
+    /// </summary>
+    public string? FromEmail { get; set; }
 
     public SmtpOptions Smtp { get; set; } = new();
 
@@ -32,6 +45,37 @@ public class EmailOptions
 
     /// <summary>Identity password-reset link lifetime in hours.</summary>
     public int ResetLinkExpiryHours { get; set; } = 1;
+
+    public bool IsSmtpConfigured => !string.IsNullOrWhiteSpace(Smtp?.Host);
+
+    /// <summary>
+    /// Resolves the effective From address for SMTP.
+    /// Prefer explicit FromAddress; accept FromEmail alias; if still a .local placeholder and
+    /// Smtp.UserName looks like an email (typical Gmail user-secrets setup), use the username.
+    /// </summary>
+    public string ResolveFromAddress()
+    {
+        if (!string.IsNullOrWhiteSpace(FromEmail) &&
+            (string.IsNullOrWhiteSpace(FromAddress) ||
+             string.Equals(FromAddress, DefaultLocalFromAddress, StringComparison.OrdinalIgnoreCase)))
+        {
+            return FromEmail.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(FromAddress) &&
+            !FromAddress.EndsWith(".local", StringComparison.OrdinalIgnoreCase))
+        {
+            return FromAddress.Trim();
+        }
+
+        var userName = Smtp?.UserName?.Trim() ?? string.Empty;
+        if (userName.Contains('@', StringComparison.Ordinal))
+        {
+            return userName;
+        }
+
+        return (FromAddress ?? string.Empty).Trim();
+    }
 }
 
 public class SmtpOptions
