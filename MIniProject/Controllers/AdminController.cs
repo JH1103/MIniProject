@@ -29,6 +29,10 @@ public class AdminController : Controller
         ViewBag.SelectedTab = selectedTab;
         ViewBag.Stats = await _reportService.GetDashboardStatsAsync();
         ViewBag.Facilities = await _db.Facilities.Include(f => f.InventoryItems).OrderBy(f => f.Name).ToListAsync();
+        ViewBag.EquipmentCatalog = await _db.EquipmentCatalogEntries
+            .OrderByDescending(e => e.IsActive)
+            .ThenBy(e => e.Name)
+            .ToListAsync();
         ViewBag.Members = await _db.Users.OrderBy(u => u.FullName).Take(40).ToListAsync();
         ViewBag.Plans = await _db.MembershipPlans.OrderByDescending(p => p.IsActive).ThenBy(p => p.AnnualFee).ToListAsync();
         ViewBag.Subscriptions = await _db.Subscriptions
@@ -60,6 +64,7 @@ public class AdminController : Controller
         if (id is null)
         {
             await PopulateFacilityCategoryOptionsAsync();
+            await PopulateEquipmentCatalogOptionsAsync();
             return View(new Facility());
         }
 
@@ -70,6 +75,7 @@ public class AdminController : Controller
         }
 
         await PopulateFacilityCategoryOptionsAsync(facility.Category);
+        await PopulateEquipmentCatalogOptionsAsync();
         return View(facility);
     }
 
@@ -93,6 +99,7 @@ public class AdminController : Controller
         if (!ModelState.IsValid)
         {
             ViewBag.Categories = categoryOptions;
+            await PopulateEquipmentCatalogOptionsAsync();
             if (model.Id > 0)
             {
                 model.InventoryItems = await _db.InventoryItems
@@ -148,6 +155,157 @@ public class AdminController : Controller
             .Distinct()
             .ToListAsync();
         return FacilityCategories.MergeWithExisting(existing, current);
+    }
+
+    private async Task PopulateEquipmentCatalogOptionsAsync(string? current = null)
+    {
+        ViewBag.EquipmentCatalogOptions = await GetEquipmentCatalogOptionsAsync(current);
+    }
+
+    private async Task<List<string>> GetEquipmentCatalogOptionsAsync(string? current = null)
+    {
+        var names = await _db.EquipmentCatalogEntries
+            .Where(e => e.IsActive)
+            .OrderBy(e => e.Name)
+            .Select(e => e.Name)
+            .ToListAsync();
+
+        if (!string.IsNullOrWhiteSpace(current) &&
+            !names.Contains(current, StringComparer.OrdinalIgnoreCase))
+        {
+            names.Add(current.Trim());
+            names = names.OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
+        return names;
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> EditEquipment(int? id)
+    {
+        if (id is null)
+        {
+            return View(new EquipmentCatalogEntry());
+        }
+
+        var item = await _db.EquipmentCatalogEntries.FirstOrDefaultAsync(e => e.Id == id);
+        return item is null ? NotFound() : View(item);
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditEquipment(EquipmentCatalogEntry model)
+    {
+        model.Name = model.Name?.Trim() ?? string.Empty;
+        model.Description = string.IsNullOrWhiteSpace(model.Description) ? null : model.Description.Trim();
+
+        if (string.IsNullOrWhiteSpace(model.Name))
+        {
+            ModelState.AddModelError(nameof(model.Name), "Equipment name is required.");
+        }
+        else
+        {
+            var duplicate = await _db.EquipmentCatalogEntries.AnyAsync(e =>
+                e.Id != model.Id &&
+                e.Name.ToLower() == model.Name.ToLower());
+            if (duplicate)
+            {
+                ModelState.AddModelError(nameof(model.Name), "An equipment item with this name already exists.");
+            }
+        }
+
+        if (!ModelState.IsValid)
+        {
+            return View(model);
+        }
+
+        if (model.Id == 0)
+        {
+            _db.EquipmentCatalogEntries.Add(model);
+            _db.AuditLogs.Add(new AuditLog
+            {
+                UserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
+                Action = "EquipmentCatalogCreated",
+                Entity = "EquipmentCatalogEntry",
+                Details = model.Name
+            });
+            await _db.SaveChangesAsync();
+            TempData["Success"] = $"Equipment “{model.Name}” added to catalog.";
+        }
+        else
+        {
+            var existing = await _db.EquipmentCatalogEntries.FirstOrDefaultAsync(e => e.Id == model.Id);
+            if (existing is null)
+            {
+                return NotFound();
+            }
+
+            var previousName = existing.Name;
+            existing.Name = model.Name;
+            existing.Description = model.Description;
+            existing.IsActive = model.IsActive;
+
+            // Keep facility inventory labels in sync when catalog name changes.
+            if (!string.Equals(previousName, model.Name, StringComparison.Ordinal))
+            {
+                var linked = await _db.InventoryItems
+                    .Where(i => i.Name == previousName)
+                    .ToListAsync();
+                foreach (var inv in linked)
+                {
+                    inv.Name = model.Name;
+                }
+            }
+
+            _db.AuditLogs.Add(new AuditLog
+            {
+                UserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
+                Action = "EquipmentCatalogUpdated",
+                Entity = $"EquipmentCatalogEntry:{existing.Id}",
+                Details = existing.Name
+            });
+            await _db.SaveChangesAsync();
+            TempData["Success"] = $"Equipment “{existing.Name}” updated.";
+        }
+
+        return RedirectToAction(nameof(Index), new { tab = "facilities" });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteEquipment(int id)
+    {
+        var item = await _db.EquipmentCatalogEntries.FirstOrDefaultAsync(e => e.Id == id);
+        if (item is null)
+        {
+            return NotFound();
+        }
+
+        var linkedCount = await _db.InventoryItems.CountAsync(i => i.Name == item.Name);
+        if (linkedCount > 0)
+        {
+            item.IsActive = false;
+            _db.AuditLogs.Add(new AuditLog
+            {
+                UserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
+                Action = "EquipmentCatalogDeactivated",
+                Entity = $"EquipmentCatalogEntry:{item.Id}",
+                Details = $"{item.Name} (linked to {linkedCount} facility inventory row(s))"
+            });
+            await _db.SaveChangesAsync();
+            TempData["Success"] = $"“{item.Name}” is linked to facility inventory, so it was deactivated instead of deleted.";
+            return RedirectToAction(nameof(Index), new { tab = "facilities" });
+        }
+
+        _db.EquipmentCatalogEntries.Remove(item);
+        _db.AuditLogs.Add(new AuditLog
+        {
+            UserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
+            Action = "EquipmentCatalogDeleted",
+            Entity = $"EquipmentCatalogEntry:{id}",
+            Details = item.Name
+        });
+        await _db.SaveChangesAsync();
+        TempData["Success"] = $"Equipment “{item.Name}” removed from catalog.";
+        return RedirectToAction(nameof(Index), new { tab = "facilities" });
     }
 
     [HttpPost, ValidateAntiForgeryToken]
@@ -218,22 +376,33 @@ public class AdminController : Controller
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> AddInventory(int facilityId, string name, int quantity, InventoryCondition condition = InventoryCondition.Good, string? notes = null)
     {
-        if (string.IsNullOrWhiteSpace(name) || quantity < 0)
+        var catalogName = await ResolveCatalogEquipmentNameAsync(name);
+        if (catalogName is null || quantity < 0)
         {
-            TempData["Error"] = "Inventory name is required and quantity cannot be negative.";
+            TempData["Error"] = catalogName is null
+                ? "Select equipment from the catalog. Use + Add equipment on the facility registry to create catalog items first."
+                : "Quantity cannot be negative.";
+            return RedirectToAction(nameof(EditFacility), new { id = facilityId });
+        }
+
+        var alreadyLinked = await _db.InventoryItems.AnyAsync(i =>
+            i.FacilityId == facilityId && i.Name.ToLower() == catalogName.ToLower());
+        if (alreadyLinked)
+        {
+            TempData["Error"] = $"“{catalogName}” is already linked to this facility. Update the existing inventory row instead.";
             return RedirectToAction(nameof(EditFacility), new { id = facilityId });
         }
 
         _db.InventoryItems.Add(new InventoryItem
         {
             FacilityId = facilityId,
-            Name = name.Trim(),
+            Name = catalogName,
             Quantity = quantity,
             Condition = condition,
             Notes = notes
         });
         await _db.SaveChangesAsync();
-        TempData["Success"] = "Inventory item added.";
+        TempData["Success"] = "Inventory item added from equipment catalog.";
         return RedirectToAction(nameof(EditFacility), new { id = facilityId });
     }
 
@@ -246,19 +415,63 @@ public class AdminController : Controller
             return NotFound();
         }
 
-        if (string.IsNullOrWhiteSpace(name) || quantity < 0)
+        var catalogName = await ResolveCatalogEquipmentNameAsync(name, allowInactive: true);
+        if (catalogName is null &&
+            !string.IsNullOrWhiteSpace(name) &&
+            string.Equals(name.Trim(), item.Name, StringComparison.OrdinalIgnoreCase))
         {
-            TempData["Error"] = "Inventory name is required and quantity cannot be negative.";
+            // Preserve legacy inventory names not yet present in the catalog.
+            catalogName = item.Name;
+        }
+
+        if (catalogName is null || quantity < 0)
+        {
+            TempData["Error"] = catalogName is null
+                ? "Select equipment from the catalog."
+                : "Quantity cannot be negative.";
             return RedirectToAction(nameof(EditFacility), new { id = item.FacilityId });
         }
 
-        item.Name = name.Trim();
+        var duplicate = await _db.InventoryItems.AnyAsync(i =>
+            i.FacilityId == item.FacilityId &&
+            i.Id != id &&
+            i.Name.ToLower() == catalogName.ToLower());
+        if (duplicate)
+        {
+            TempData["Error"] = $"“{catalogName}” is already linked to this facility.";
+            return RedirectToAction(nameof(EditFacility), new { id = item.FacilityId });
+        }
+
+        item.Name = catalogName;
         item.Quantity = quantity;
         item.Condition = condition;
         item.Notes = notes;
         await _db.SaveChangesAsync();
         TempData["Success"] = $"Inventory “{item.Name}” updated.";
         return RedirectToAction(nameof(EditFacility), new { id = item.FacilityId });
+    }
+
+    private async Task<string?> ResolveCatalogEquipmentNameAsync(string? name, bool allowInactive = false)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return null;
+        }
+
+        var trimmed = name.Trim();
+        var match = await _db.EquipmentCatalogEntries.FirstOrDefaultAsync(e =>
+            e.Name.ToLower() == trimmed.ToLower());
+        if (match is null)
+        {
+            return null;
+        }
+
+        if (!match.IsActive && !allowInactive)
+        {
+            return null;
+        }
+
+        return match.Name;
     }
 
     [HttpPost, ValidateAntiForgeryToken]
@@ -494,18 +707,29 @@ public class AdminController : Controller
     }
 
     [HttpGet]
-    public IActionResult CreateMember()
+    public IActionResult CreateStaff()
     {
-        return View(new AdminMemberFormViewModel());
+        return View(new AdminMemberFormViewModel
+        {
+            MembershipStatus = MembershipStatus.Expired
+        });
     }
 
+    /// <summary>Legacy route — admin creates staff accounts only.</summary>
+    [HttpGet]
+    public IActionResult CreateMember() => RedirectToAction(nameof(CreateStaff));
+
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> CreateMember(AdminMemberFormViewModel model)
+    public async Task<IActionResult> CreateStaff(AdminMemberFormViewModel model)
     {
         if (string.IsNullOrWhiteSpace(model.Password))
         {
-            ModelState.AddModelError(nameof(model.Password), "Password is required for new members.");
+            ModelState.AddModelError(nameof(model.Password), "Password is required for new staff accounts.");
         }
+
+        // Staff accounts are operational logins, not club members.
+        model.MembershipStatus = MembershipStatus.Expired;
+        ModelState.Remove(nameof(model.MembershipStatus));
 
         if (!ModelState.IsValid)
         {
@@ -520,7 +744,7 @@ public class AdminController : Controller
             PhoneNumber = model.PhoneNumber,
             IdentificationNumber = model.IdentificationNumber,
             Address = model.Address,
-            MembershipStatus = model.MembershipStatus,
+            MembershipStatus = MembershipStatus.Expired,
             EmailConfirmed = true,
             PdpaConsent = true,
             PdpaConsentAt = DateTime.UtcNow
@@ -537,16 +761,16 @@ public class AdminController : Controller
             return View(model);
         }
 
-        await _userManager.AddToRoleAsync(user, AppRoles.Member);
+        await _userManager.AddToRoleAsync(user, AppRoles.Staff);
         _db.AuditLogs.Add(new AuditLog
         {
             UserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
-            Action = "MemberCreated",
+            Action = "StaffCreated",
             Entity = $"User:{user.Id}",
             Details = user.Email
         });
         await _db.SaveChangesAsync();
-        TempData["Success"] = $"Member “{user.FullName}” created.";
+        TempData["Success"] = $"Staff account “{user.FullName}” created.";
         return RedirectToAction(nameof(Index), new { tab = "membership" });
     }
 
@@ -579,64 +803,43 @@ public class AdminController : Controller
             return NotFound();
         }
 
-        if (!ModelState.IsValid)
-        {
-            return View(model);
-        }
-
         var user = await _userManager.FindByIdAsync(model.Id);
         if (user is null)
         {
             return NotFound();
         }
 
-        user.FullName = model.FullName.Trim();
-        user.PhoneNumber = model.PhoneNumber;
-        user.IdentificationNumber = model.IdentificationNumber;
-        user.Address = model.Address;
+        // Profile fields are read-only in admin edit; only membership status can change.
+        ModelState.Remove(nameof(model.FullName));
+        ModelState.Remove(nameof(model.Email));
+        ModelState.Remove(nameof(model.PhoneNumber));
+        ModelState.Remove(nameof(model.IdentificationNumber));
+        ModelState.Remove(nameof(model.Address));
+        ModelState.Remove(nameof(model.Password));
+
+        model.FullName = user.FullName;
+        model.Email = user.Email ?? string.Empty;
+        model.PhoneNumber = user.PhoneNumber;
+        model.IdentificationNumber = user.IdentificationNumber;
+        model.Address = user.Address;
+        model.Password = null;
+
+        if (!ModelState.IsValid)
+        {
+            return View(model);
+        }
+
         user.MembershipStatus = model.MembershipStatus;
-
-        if (!string.Equals(user.Email, model.Email.Trim(), StringComparison.OrdinalIgnoreCase))
-        {
-            var setEmail = await _userManager.SetEmailAsync(user, model.Email.Trim());
-            if (!setEmail.Succeeded)
-            {
-                foreach (var error in setEmail.Errors)
-                {
-                    ModelState.AddModelError(string.Empty, error.Description);
-                }
-
-                return View(model);
-            }
-
-            await _userManager.SetUserNameAsync(user, model.Email.Trim());
-        }
-
-        if (!string.IsNullOrWhiteSpace(model.Password))
-        {
-            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
-            var reset = await _userManager.ResetPasswordAsync(user, token, model.Password);
-            if (!reset.Succeeded)
-            {
-                foreach (var error in reset.Errors)
-                {
-                    ModelState.AddModelError(string.Empty, error.Description);
-                }
-
-                return View(model);
-            }
-        }
-
         await _userManager.UpdateAsync(user);
         _db.AuditLogs.Add(new AuditLog
         {
             UserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
-            Action = "MemberUpdated",
+            Action = "MemberStatusUpdated",
             Entity = $"User:{user.Id}",
-            Details = user.Email
+            Details = $"{user.Email} → {user.MembershipStatus}"
         });
         await _db.SaveChangesAsync();
-        TempData["Success"] = $"Member “{user.FullName}” updated.";
+        TempData["Success"] = $"Membership status for “{user.FullName}” updated.";
         return RedirectToAction(nameof(Index), new { tab = "membership" });
     }
 

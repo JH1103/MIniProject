@@ -2,6 +2,7 @@
     ViewData["Title"] = "Admin governance";
     var stats = ViewBag.Stats as DashboardStats ?? new();
     var facilities = ViewBag.Facilities as List<Facility> ?? new();
+    var equipmentCatalog = ViewBag.EquipmentCatalog as List<EquipmentCatalogEntry> ?? new();
     var members = ViewBag.Members as List<ApplicationUser> ?? new();
     var plans = ViewBag.Plans as List<MembershipPlan> ?? new();
     var subscriptions = ViewBag.Subscriptions as List<Subscription> ?? new();
@@ -59,9 +60,65 @@
             <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-3">
                 <div>
                     <h2 class="h4 mb-1">Facility &amp; equipment registry</h2>
-                    <p class="muted mb-0">Manage rates, hours, booking mode and linked inventory.</p>
+                    <p class="muted mb-0">Manage rates, hours, booking mode and linked inventory. Add equipment to the catalog, then link it on each facility.</p>
                 </div>
-                <a class="btn btn-primary" asp-action="EditFacility">+ Add facility</a>
+                <div class="d-flex flex-wrap gap-2">
+                    <a class="btn btn-ghost" asp-action="EditEquipment">+ Add equipment</a>
+                    <a class="btn btn-primary" asp-action="EditFacility">+ Add facility</a>
+                </div>
+            </div>
+
+            <div class="panel mb-3">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                    <h3 class="h5 mb-0">Equipment catalog</h3>
+                    <span class="small muted">Source for facility inventory linking</span>
+                </div>
+                @if (!equipmentCatalog.Any())
+                {
+                    <p class="muted mb-0">No equipment catalog items yet. Use <strong>+ Add equipment</strong> to create the first item.</p>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Equipment</th>
+                                    <th>Description</th>
+                                    <th>Status</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            @foreach (var equipment in equipmentCatalog)
+                            {
+                                <tr>
+                                    <td><strong>@equipment.Name</strong></td>
+                                    <td class="small muted">@(string.IsNullOrWhiteSpace(equipment.Description) ? "—" : equipment.Description)</td>
+                                    <td>
+                                        @if (equipment.IsActive)
+                                        {
+                                            <span class="badge-soft">Active</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge-warn">Inactive</span>
+                                        }
+                                    </td>
+                                    <td class="text-nowrap">
+                                        <a class="btn btn-sm btn-ghost" asp-action="EditEquipment" asp-route-id="@equipment.Id">Edit</a>
+                                        <form asp-action="DeleteEquipment" method="post" class="d-inline" onsubmit="return confirm('Delete or deactivate this equipment catalog item?');">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="id" value="@equipment.Id" />
+                                            <button class="btn btn-sm btn-ghost admin-danger" type="submit">Delete</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                }
             </div>
 
             <div class="admin-facility-list">
@@ -104,7 +161,6 @@
                                     </form>
                                 }
                                 <a class="btn btn-sm btn-ghost" asp-action="EditFacility" asp-route-id="@facility.Id">Edit facility</a>
-                                <a class="btn btn-sm btn-primary" asp-action="EditFacility" asp-route-id="@facility.Id">+ Add equipment</a>
                                 <form asp-action="DeleteFacility" method="post" class="d-inline" onsubmit="return confirm('Delete this facility?');">
                                     @Html.AntiForgeryToken()
                                     <input type="hidden" name="id" value="@facility.Id" />
@@ -144,7 +200,7 @@
                     <p class="muted mb-0">CRUD for membership plans, members and subscriptions. Administrator accounts do not hold a personal membership plan.</p>
                 </div>
                 <div class="d-flex flex-wrap gap-2">
-                    <a class="btn btn-ghost btn-sm" asp-action="CreateMember">+ Create member</a>
+                    <a class="btn btn-ghost btn-sm" asp-action="CreateStaff">+ Create staff</a>
                     <a class="btn btn-primary btn-sm" asp-action="EditPlan">+ Create plan</a>
                 </div>
             </div>

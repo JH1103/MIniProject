@@ -21,6 +21,7 @@ public static class DbSeeder
         await EnsureMemberCheckInTableAsync(db);
         await EnsureClearanceSchemaAsync(db);
         await EnsureEquipmentRentalTableAsync(db);
+        await EnsureEquipmentCatalogTableAsync(db);
 
         foreach (var role in AppRoles.All)
         {
@@ -50,6 +51,7 @@ public static class DbSeeder
 
         await SeedMembershipPlansAsync(db);
         await SeedKotaPermaiFacilitiesAsync(db);
+        await BackfillEquipmentCatalogAsync(db);
 
         if (!db.Announcements.Any())
         {
@@ -647,6 +649,73 @@ public static class DbSeeder
                     ON [EquipmentRentals] ([MemberId], [Status]);
             END
             """);
+    }
+
+    /// <summary>
+    /// Creates the equipment catalog table on existing SQL Server installs
+    /// (EnsureCreated does not add new tables to an already-created database).
+    /// </summary>
+    private static async Task EnsureEquipmentCatalogTableAsync(ApplicationDbContext db)
+    {
+        if (!db.Database.IsSqlServer())
+        {
+            return;
+        }
+
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            IF OBJECT_ID(N'[EquipmentCatalogEntries]', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [EquipmentCatalogEntries] (
+                    [Id] int NOT NULL IDENTITY,
+                    [Name] nvarchar(120) NOT NULL,
+                    [Description] nvarchar(500) NULL,
+                    [IsActive] bit NOT NULL CONSTRAINT DF_EquipmentCatalogEntries_IsActive DEFAULT(1),
+                    CONSTRAINT [PK_EquipmentCatalogEntries] PRIMARY KEY ([Id])
+                );
+                CREATE UNIQUE INDEX [IX_EquipmentCatalogEntries_Name]
+                    ON [EquipmentCatalogEntries] ([Name]);
+            END
+            """);
+    }
+
+    /// <summary>
+    /// Backfills distinct inventory item names into the equipment catalog so
+    /// facility inventory can pick from catalog entries.
+    /// </summary>
+    private static async Task BackfillEquipmentCatalogAsync(ApplicationDbContext db)
+    {
+        var existingNames = await db.EquipmentCatalogEntries
+            .Select(e => e.Name)
+            .ToListAsync();
+        var existingSet = new HashSet<string>(existingNames, StringComparer.OrdinalIgnoreCase);
+
+        var inventoryNames = await db.InventoryItems
+            .Select(i => i.Name)
+            .Where(n => n != null && n != "")
+            .Distinct()
+            .ToListAsync();
+
+        foreach (var name in inventoryNames)
+        {
+            var trimmed = name.Trim();
+            if (trimmed.Length == 0 || existingSet.Contains(trimmed))
+            {
+                continue;
+            }
+
+            db.EquipmentCatalogEntries.Add(new EquipmentCatalogEntry
+            {
+                Name = trimmed,
+                IsActive = true
+            });
+            existingSet.Add(trimmed);
+        }
+
+        if (db.ChangeTracker.HasChanges())
+        {
+            await db.SaveChangesAsync();
+        }
     }
 }
 
