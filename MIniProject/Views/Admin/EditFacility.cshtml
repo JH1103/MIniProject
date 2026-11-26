@@ -1,6 +1,7 @@
 @model Facility
 @{
     ViewData["Title"] = Model.Id == 0 ? "Add facility" : "Edit facility";
+    var categories = ViewBag.Categories as List<string> ?? new List<string>();
 }
 
 <section class="section">
@@ -19,7 +20,14 @@
                 </div>
                 <div class="col-md-6">
                     <label asp-for="Category" class="form-label"></label>
-                    <input asp-for="Category" class="form-control" />
+                    <select asp-for="Category" class="form-select" required>
+                        <option value="">Select category</option>
+                        @foreach (var category in categories)
+                        {
+                            <option value="@category">@category</option>
+                        }
+                    </select>
+                    <span asp-validation-for="Category" class="text-danger small"></span>
                 </div>
                 <div class="col-12">
                     <label asp-for="Description" class="form-label"></label>
