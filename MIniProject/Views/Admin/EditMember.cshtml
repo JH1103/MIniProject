@@ -7,7 +7,7 @@
     <div class="container" style="max-width:720px">
         <div class="section-head">
             <h2>Edit member</h2>
-            <p class="muted mb-0">Update member profile details. Leave password blank to keep the current password.</p>
+            <p class="muted mb-0">Profile details are read-only. Only membership status can be changed here, or deactivate the account.</p>
         </div>
         <form asp-action="EditMember" method="post" class="panel">
             @Html.AntiForgeryToken()
@@ -16,27 +16,28 @@
             <div class="row g-3">
                 <div class="col-md-6">
                     <label asp-for="FullName" class="form-label"></label>
-                    <input asp-for="FullName" class="form-control" />
+                    <input asp-for="FullName" class="form-control is-readonly" readonly tabindex="-1" />
                 </div>
                 <div class="col-md-6">
                     <label asp-for="Email" class="form-label"></label>
-                    <input asp-for="Email" class="form-control" />
+                    <input asp-for="Email" class="form-control is-readonly" readonly tabindex="-1" />
                 </div>
                 <div class="col-md-6">
                     <label asp-for="PhoneNumber" class="form-label"></label>
-                    <input asp-for="PhoneNumber" class="form-control" />
+                    <input asp-for="PhoneNumber" class="form-control is-readonly" readonly tabindex="-1" />
                 </div>
                 <div class="col-md-6">
                     <label asp-for="IdentificationNumber" class="form-label"></label>
-                    <input asp-for="IdentificationNumber" class="form-control" />
+                    <input asp-for="IdentificationNumber" class="form-control is-readonly" readonly tabindex="-1" />
                 </div>
                 <div class="col-12">
                     <label asp-for="Address" class="form-label"></label>
-                    <input asp-for="Address" class="form-control" />
+                    <input asp-for="Address" class="form-control is-readonly" readonly tabindex="-1" />
                 </div>
                 <div class="col-md-6">
                     <label asp-for="Password" class="form-label"></label>
-                    <input asp-for="Password" class="form-control" placeholder="Optional new password" />
+                    <input class="form-control is-readonly" type="password" value="********" disabled tabindex="-1" aria-disabled="true" />
+                    <div class="small muted mt-1">Password cannot be changed from admin edit.</div>
                 </div>
                 <div class="col-md-6">
                     <label asp-for="MembershipStatus" class="form-label"></label>
@@ -44,7 +45,7 @@
                 </div>
             </div>
             <div class="mt-4 d-flex flex-wrap gap-2">
-                <button class="btn btn-primary" type="submit">Save member</button>
+                <button class="btn btn-primary" type="submit">Save membership status</button>
                 <a class="btn btn-ghost" asp-action="Index" asp-route-tab="membership">Back</a>
             </div>
         </form>

@@ -2,6 +2,7 @@
 @{
     ViewData["Title"] = Model.Id == 0 ? "Add facility" : "Edit facility";
     var categories = ViewBag.Categories as List<string> ?? new List<string>();
+    var equipmentOptions = ViewBag.EquipmentCatalogOptions as List<string> ?? new List<string>();
 }
 
 <section class="section">
@@ -92,16 +93,32 @@
         {
             <div class="panel mt-3">
                 <h3 class="h5">Inventory (CRUD)</h3>
-                <form asp-action="AddInventory" method="post" class="row g-2 mb-3">
-                    @Html.AntiForgeryToken()
-                    <input type="hidden" name="facilityId" value="@Model.Id" />
-                    <div class="col-md-4"><input class="form-control" name="name" placeholder="Item name" required /></div>
-                    <div class="col-md-2"><input class="form-control" name="quantity" type="number" value="1" min="0" /></div>
-                    <div class="col-md-3">
-                        <select class="form-select" name="condition" asp-items="Html.GetEnumSelectList<InventoryCondition>()"></select>
-                    </div>
-                    <div class="col-md-3"><button class="btn btn-ghost w-100" type="submit">Add inventory</button></div>
-                </form>
+                <p class="muted small">Link equipment from the club catalog. Create catalog items with <strong>+ Add equipment</strong> on the facility registry.</p>
+                @if (!equipmentOptions.Any())
+                {
+                    <p class="muted mb-3">No equipment in the catalog yet. <a asp-action="EditEquipment">+ Add equipment</a> first, then link it here.</p>
+                }
+                else
+                {
+                    <form asp-action="AddInventory" method="post" class="row g-2 mb-3">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="facilityId" value="@Model.Id" />
+                        <div class="col-md-4">
+                            <select class="form-select" name="name" required>
+                                <option value="">Select equipment</option>
+                                @foreach (var option in equipmentOptions)
+                                {
+                                    <option value="@option">@option</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-2"><input class="form-control" name="quantity" type="number" value="1" min="0" /></div>
+                        <div class="col-md-3">
+                            <select class="form-select" name="condition" asp-items="Html.GetEnumSelectList<InventoryCondition>()"></select>
+                        </div>
+                        <div class="col-md-3"><button class="btn btn-ghost w-100" type="submit">Add inventory</button></div>
+                    </form>
+                }
 
                 @if (Model.InventoryItems?.Any() == true)
                 {
@@ -119,13 +136,32 @@
                             <tbody>
                             @foreach (var item in Model.InventoryItems.OrderBy(i => i.Name))
                             {
+                                var rowOptions = equipmentOptions.ToList();
+                                if (!string.IsNullOrWhiteSpace(item.Name) &&
+                                    !rowOptions.Contains(item.Name, StringComparer.OrdinalIgnoreCase))
+                                {
+                                    rowOptions.Add(item.Name);
+                                    rowOptions = rowOptions.OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
+                                }
                                 <tr>
                                     <td colspan="5" class="p-0">
                                         <form asp-action="UpdateInventory" method="post" class="row g-2 align-items-center p-2 m-0 border-bottom">
                                             @Html.AntiForgeryToken()
                                             <input type="hidden" name="id" value="@item.Id" />
                                             <div class="col-md-3">
-                                                <input class="form-control form-control-sm" name="name" value="@item.Name" required />
+                                                <select class="form-select form-select-sm" name="name" required>
+                                                    @foreach (var option in rowOptions)
+                                                    {
+                                                        if (string.Equals(option, item.Name, StringComparison.OrdinalIgnoreCase))
+                                                        {
+                                                            <option value="@option" selected>@option</option>
+                                                        }
+                                                        else
+                                                        {
+                                                            <option value="@option">@option</option>
+                                                        }
+                                                    }
+                                                </select>
                                             </div>
                                             <div class="col-md-2">
                                                 <input class="form-control form-control-sm" name="quantity" type="number" min="0" value="@item.Quantity" />

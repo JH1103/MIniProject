@@ -14,6 +14,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Subscription> Subscriptions => Set<Subscription>();
     public DbSet<Facility> Facilities => Set<Facility>();
     public DbSet<InventoryItem> InventoryItems => Set<InventoryItem>();
+    public DbSet<EquipmentCatalogEntry> EquipmentCatalogEntries => Set<EquipmentCatalogEntry>();
     public DbSet<EquipmentRental> EquipmentRentals => Set<EquipmentRental>();
     public DbSet<FacilityBlockOut> FacilityBlockOuts => Set<FacilityBlockOut>();
     public DbSet<Booking> Bookings => Set<Booking>();
@@ -39,6 +40,10 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             .WithOne(i => i.Facility!)
             .HasForeignKey(i => i.FacilityId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<EquipmentCatalogEntry>()
+            .HasIndex(e => e.Name)
+            .IsUnique();
 
         builder.Entity<Facility>()
             .HasMany(f => f.BlockOuts)

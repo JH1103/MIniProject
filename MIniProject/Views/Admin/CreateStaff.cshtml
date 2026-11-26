@@ -1,15 +1,15 @@
 @model AdminMemberFormViewModel
 @{
-    ViewData["Title"] = "Create member";
+    ViewData["Title"] = "Create staff";
 }
 
 <section class="section">
     <div class="container" style="max-width:720px">
         <div class="section-head">
-            <h2>Create member</h2>
-            <p class="muted mb-0">Register a new member account from admin governance.</p>
+            <h2>Create staff</h2>
+            <p class="muted mb-0">Register a staff account for clubhouse operations. Members self-register; admins create staff only.</p>
         </div>
-        <form asp-action="CreateMember" method="post" class="panel">
+        <form asp-action="CreateStaff" method="post" class="panel">
             @Html.AntiForgeryToken()
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             <div class="row g-3">
@@ -41,12 +41,13 @@
                     <span asp-validation-for="Password" class="text-danger"></span>
                 </div>
                 <div class="col-md-6">
-                    <label asp-for="MembershipStatus" class="form-label"></label>
-                    <select asp-for="MembershipStatus" class="form-select" asp-items="Html.GetEnumSelectList<MembershipStatus>()"></select>
+                    <label class="form-label">Role</label>
+                    <input class="form-control is-readonly" value="Staff" readonly tabindex="-1" />
+                    <div class="small muted mt-1">Assigned the Staff role for check-in and operations.</div>
                 </div>
             </div>
             <div class="mt-4 d-flex gap-2">
-                <button class="btn btn-primary" type="submit">Create member</button>
+                <button class="btn btn-primary" type="submit">Create staff</button>
                 <a class="btn btn-ghost" asp-action="Index" asp-route-tab="membership">Back</a>
             </div>
         </form>

@@ -1632,3 +1632,24 @@ body.nav-open .nav-toggle__bar:nth-child(3) {
   border-color: rgba(20, 35, 28, 0.12);
   box-shadow: none;
 }
+
+/* Admin edit member: profile fields stay visible/submittable but unselectable. */
+.form-control.is-readonly,
+.form-control.is-readonly[readonly],
+.form-control.is-readonly:disabled {
+  background-color: #dfe8e2;
+  color: rgba(20, 35, 28, 0.65);
+  cursor: not-allowed;
+  opacity: 1;
+  border-color: rgba(20, 35, 28, 0.12);
+  box-shadow: none;
+  user-select: none;
+  pointer-events: none;
+}
+
+.form-control.is-readonly:focus {
+  background-color: #dfe8e2;
+  color: rgba(20, 35, 28, 0.65);
+  border-color: rgba(20, 35, 28, 0.12);
+  box-shadow: none;
+}
