@@ -77,8 +77,22 @@ public class MemberController : Controller
             UpgradePlans = upgradePlans,
             UpcomingBookings = await _db.Bookings
                 .Include(b => b.Facility)
-                .Where(b => b.MemberId == user.Id && b.EndUtc >= DateTime.UtcNow && b.Status != BookingStatus.Cancelled)
+                .Where(b => b.MemberId == user.Id &&
+                            b.EndUtc >= DateTime.UtcNow &&
+                            b.Status != BookingStatus.Cancelled &&
+                            b.Status != BookingStatus.Completed &&
+                            b.Status != BookingStatus.NoShow)
                 .OrderBy(b => b.StartUtc)
+                .Take(10)
+                .ToListAsync(),
+            BookingHistory = await _db.Bookings
+                .Include(b => b.Facility)
+                .Where(b => b.MemberId == user.Id &&
+                            (b.Status == BookingStatus.Cancelled ||
+                             b.Status == BookingStatus.Completed ||
+                             b.Status == BookingStatus.NoShow ||
+                             b.EndUtc < DateTime.UtcNow))
+                .OrderByDescending(b => b.StartUtc)
                 .Take(10)
                 .ToListAsync(),
             EquipmentRentals = await _db.EquipmentRentals
