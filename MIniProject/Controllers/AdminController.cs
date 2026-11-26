@@ -59,18 +59,47 @@ public class AdminController : Controller
     {
         if (id is null)
         {
+            await PopulateFacilityCategoryOptionsAsync();
             return View(new Facility());
         }
 
         var facility = await _db.Facilities.Include(f => f.InventoryItems).FirstOrDefaultAsync(f => f.Id == id);
-        return facility is null ? NotFound() : View(facility);
+        if (facility is null)
+        {
+            return NotFound();
+        }
+
+        await PopulateFacilityCategoryOptionsAsync(facility.Category);
+        return View(facility);
     }
 
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> EditFacility(Facility model)
     {
+        model.Category = model.Category?.Trim() ?? string.Empty;
+        var categoryOptions = await GetFacilityCategoryOptionsAsync(model.Category);
+        if (string.IsNullOrWhiteSpace(model.Category) ||
+            !categoryOptions.Contains(model.Category, StringComparer.OrdinalIgnoreCase))
+        {
+            ModelState.AddModelError(nameof(model.Category), "Select a category from the list.");
+        }
+        else
+        {
+            // Normalize to the canonical casing from the option list.
+            model.Category = categoryOptions.First(c =>
+                string.Equals(c, model.Category, StringComparison.OrdinalIgnoreCase));
+        }
+
         if (!ModelState.IsValid)
         {
+            ViewBag.Categories = categoryOptions;
+            if (model.Id > 0)
+            {
+                model.InventoryItems = await _db.InventoryItems
+                    .Where(i => i.FacilityId == model.Id)
+                    .ToListAsync();
+            }
+
             return View(model);
         }
 
@@ -104,6 +133,21 @@ public class AdminController : Controller
         await _db.SaveChangesAsync();
         TempData["Success"] = "Facility saved.";
         return RedirectToAction(nameof(Index), new { tab = "facilities" });
+    }
+
+    private async Task PopulateFacilityCategoryOptionsAsync(string? current = null)
+    {
+        ViewBag.Categories = await GetFacilityCategoryOptionsAsync(current);
+    }
+
+    private async Task<List<string>> GetFacilityCategoryOptionsAsync(string? current = null)
+    {
+        var existing = await _db.Facilities
+            .Select(f => f.Category)
+            .Where(c => c != null && c != "")
+            .Distinct()
+            .ToListAsync();
+        return FacilityCategories.MergeWithExisting(existing, current);
     }
 
     [HttpPost, ValidateAntiForgeryToken]
