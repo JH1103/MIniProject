@@ -182,18 +182,14 @@
                                     <a asp-controller="EquipmentRentals" asp-action="Details" asp-route-id="@rental.Id">
                                         @(rental.InventoryItem?.Name ?? "Equipment") × @rental.Quantity
                                     </a>
-                                    @if (rental.Status == EquipmentRentalStatus.Active)
-                                    {
-                                        <span class="badge-soft">Active</span>
+                                    @{
+                                        var rentalLabel = EquipmentRentalLifecycle.DisplayLabel(rental.Status);
+                                        var rentalBadge = rental.Status is EquipmentRentalStatus.Rented
+                                            or EquipmentRentalStatus.Active
+                                            ? "badge-soft"
+                                            : "badge-warn";
                                     }
-                                    else if (rental.Status == EquipmentRentalStatus.Cancelled)
-                                    {
-                                        <span class="badge-warn">Inactive</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge-warn">@rental.Status</span>
-                                    }
+                                    <span class="@rentalBadge">@rentalLabel</span>
                                     <div class="small muted">
                                         @(rental.InventoryItem?.Facility?.Name ?? "Facility")
                                         · @rental.StartUtc.ToLocalTime().ToString("dd MMM HH:mm")

@@ -11,7 +11,11 @@
         <div class="section-head d-flex flex-wrap justify-content-between align-items-end gap-3">
             <div>
                 <h2>Equipment rentals</h2>
-                <p class="muted mb-0">Rent facility equipment, track returns, and remove invalid records.</p>
+                <p class="muted mb-0">
+                    @(isStaff
+                        ? "Confirm member pickup, track rented gear, and resolve returns."
+                        : "Rent facility equipment linked to your booking. Staff confirm pickup before returns.")
+                </p>
             </div>
             <div class="d-flex flex-wrap gap-2">
                 @if (isMember)
@@ -31,9 +35,9 @@
         @if (isMember && !canCreateRental)
         {
             <div class="alert alert-warning" role="status">
-                You need an eligible facility booking before you can rent equipment.
-                <a asp-controller="Facilities" asp-action="Index" class="alert-link">Book a facility</a>,
-                then return here to create a rental linked to that booking.
+                You are not allowed to have any equipment rental.
+                <a asp-controller="Facilities" asp-action="Index" class="alert-link">Book a facility</a>
+                first, then return here to create a rental linked to that booking.
             </div>
         }
 
@@ -79,25 +83,35 @@
                                 </td>
                                 <td>MYR @rental.Fee.ToString("N2")</td>
                                 <td>
-                                    @if (rental.Status == EquipmentRentalStatus.Active)
-                                    {
-                                        <span class="badge-soft">Active</span>
+                                    @{
+                                        var statusLabel = EquipmentRentalLifecycle.DisplayLabel(rental.Status);
+                                        var statusClass = rental.Status is EquipmentRentalStatus.Rented
+                                            or EquipmentRentalStatus.Active
+                                            ? "badge-soft"
+                                            : "badge-warn";
                                     }
-                                    else if (rental.Status == EquipmentRentalStatus.Cancelled)
-                                    {
-                                        <span class="badge-warn">Inactive</span>
-                                    }
-                                    else if (rental.Status == EquipmentRentalStatus.Invalid)
-                                    {
-                                        <span class="badge-warn">Invalid</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge-warn">@rental.Status</span>
-                                    }
+                                    <span class="@statusClass">@statusLabel</span>
                                 </td>
                                 <td class="text-nowrap">
                                     <a asp-action="Details" asp-route-id="@rental.Id">View</a>
+                                    @if (isStaff && EquipmentRentalLifecycle.CanMarkPickedUp(rental.Status))
+                                    {
+                                        <text> · </text>
+                                        <form asp-action="MarkPickedUp" method="post" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="id" value="@rental.Id" />
+                                            <button class="btn btn-link p-0 align-baseline" type="submit">Mark taken</button>
+                                        </form>
+                                    }
+                                    @if (EquipmentRentalLifecycle.CanMarkReturned(rental.Status))
+                                    {
+                                        <text> · </text>
+                                        <form asp-action="Return" method="post" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="id" value="@rental.Id" />
+                                            <button class="btn btn-link p-0 align-baseline" type="submit">Mark returned</button>
+                                        </form>
+                                    }
                                 </td>
                             </tr>
                         }

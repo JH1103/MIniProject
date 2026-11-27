@@ -53,6 +53,7 @@ public class EquipmentRentalsController : Controller
         }
 
         var rentals = await query.OrderByDescending(r => r.CreatedAt).Take(100).ToListAsync();
+        await SyncRentalStatusesAsync(rentals);
         return View(rentals);
     }
 
@@ -69,6 +70,7 @@ public class EquipmentRentalsController : Controller
             return Forbid();
         }
 
+        await SyncRentalStatusesAsync([rental]);
         return View(rental);
     }
 
@@ -222,9 +224,13 @@ public class EquipmentRentalsController : Controller
             return Forbid();
         }
 
-        if (rental.Status is EquipmentRentalStatus.Returned or EquipmentRentalStatus.Cancelled)
+        await SyncRentalStatusesAsync([rental]);
+
+        if (rental.Status is EquipmentRentalStatus.Returned
+            or EquipmentRentalStatus.Cancelled
+            or EquipmentRentalStatus.Inactive)
         {
-            TempData["Error"] = "Returned or cancelled rentals cannot be edited.";
+            TempData["Error"] = "Returned or inactive rentals cannot be edited.";
             return RedirectToAction(nameof(Details), new { id });
         }
 
@@ -268,9 +274,13 @@ public class EquipmentRentalsController : Controller
             return Forbid();
         }
 
-        if (rental.Status is EquipmentRentalStatus.Returned or EquipmentRentalStatus.Cancelled)
+        await SyncRentalStatusesAsync([rental]);
+
+        if (rental.Status is EquipmentRentalStatus.Returned
+            or EquipmentRentalStatus.Cancelled
+            or EquipmentRentalStatus.Inactive)
         {
-            TempData["Error"] = "Returned or cancelled rentals cannot be edited.";
+            TempData["Error"] = "Returned or inactive rentals cannot be edited.";
             return RedirectToAction(nameof(Details), new { id = rental.Id });
         }
 
@@ -291,8 +301,13 @@ public class EquipmentRentalsController : Controller
             return View(await BuildFormAsync(rental.MemberId, model));
         }
 
-        // Restore previous stock, then apply new quantity against current item.
-        if (rental.InventoryItem is not null)
+        // Restore previous stock, then apply new quantity against current item
+        // (stock is reserved while Active / held while Rented or NotReturned).
+        // Invalid/Inactive/Cancelled already restored stock when they transitioned.
+        if (rental.InventoryItem is not null &&
+            rental.Status is EquipmentRentalStatus.Active
+                or EquipmentRentalStatus.Rented
+                or EquipmentRentalStatus.NotReturned)
         {
             rental.InventoryItem.Quantity += rental.Quantity;
         }
@@ -354,11 +369,22 @@ public class EquipmentRentalsController : Controller
         }
         if (User.IsInRole(AppRoles.Staff) || User.IsInRole(AppRoles.Administrator))
         {
-            // Staff cannot mark Cancelled-booking rentals Active via status override.
-            if (model.Status == EquipmentRentalStatus.Active && await IsLinkedBookingCancelledAsync(rental))
+            // Staff cannot mark Cancelled-booking rentals Active/Rented via status override.
+            if ((model.Status is EquipmentRentalStatus.Active or EquipmentRentalStatus.Rented) &&
+                await IsLinkedBookingCancelledAsync(rental))
             {
-                ModelState.AddModelError(nameof(model.Status), "Rentals linked to cancelled bookings cannot be active.");
+                ModelState.AddModelError(nameof(model.Status), "Rentals linked to cancelled bookings cannot be active or rented.");
                 return View(await BuildFormAsync(rental.MemberId, model));
+            }
+
+            if (model.Status == EquipmentRentalStatus.Rented && rental.PickedUpAt is null)
+            {
+                rental.PickedUpAt = DateTime.UtcNow;
+            }
+
+            if (model.Status == EquipmentRentalStatus.Returned && rental.ReturnedAt is null)
+            {
+                rental.ReturnedAt = DateTime.UtcNow;
             }
 
             rental.Status = model.Status;
@@ -367,6 +393,39 @@ public class EquipmentRentalsController : Controller
         await _db.SaveChangesAsync();
         TempData["Success"] = "Rental updated.";
         return RedirectToAction(nameof(Details), new { id = rental.Id });
+    }
+
+    [Authorize(Roles = AppRoles.Staff + "," + AppRoles.Administrator)]
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> MarkPickedUp(int id)
+    {
+        var rental = await _db.EquipmentRentals
+            .Include(r => r.InventoryItem)
+            .FirstOrDefaultAsync(r => r.Id == id);
+        if (rental is null)
+        {
+            return NotFound();
+        }
+
+        await SyncRentalStatusesAsync([rental]);
+
+        if (await IsLinkedBookingCancelledAsync(rental))
+        {
+            await ForceCancelRentalAsync(rental);
+            TempData["Error"] = "This rental is linked to a cancelled booking and is now inactive.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        if (!EquipmentRentalLifecycle.CanMarkPickedUp(rental.Status))
+        {
+            TempData["Error"] = "Only awaiting-pickup rentals can be marked as taken.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        EquipmentRentalLifecycle.MarkPickedUp(rental, DateTime.UtcNow);
+        await _db.SaveChangesAsync();
+        TempData["Success"] = "Equipment marked as taken by the member (Rented).";
+        return RedirectToAction(nameof(Details), new { id });
     }
 
     [HttpPost, ValidateAntiForgeryToken]
@@ -385,11 +444,7 @@ public class EquipmentRentalsController : Controller
             return Forbid();
         }
 
-        if (rental.Status != EquipmentRentalStatus.Active)
-        {
-            TempData["Error"] = "Only active rentals can be returned.";
-            return RedirectToAction(nameof(Details), new { id });
-        }
+        await SyncRentalStatusesAsync([rental]);
 
         if (await IsLinkedBookingCancelledAsync(rental))
         {
@@ -398,13 +453,13 @@ public class EquipmentRentalsController : Controller
             return RedirectToAction(nameof(Details), new { id });
         }
 
-        rental.Status = EquipmentRentalStatus.Returned;
-        rental.ReturnedAt = DateTime.UtcNow;
-        if (rental.InventoryItem is not null)
+        if (!EquipmentRentalLifecycle.CanMarkReturned(rental.Status))
         {
-            rental.InventoryItem.Quantity += rental.Quantity;
+            TempData["Error"] = "Only picked-up equipment (Rented) can be marked as returned. Staff must confirm pickup first.";
+            return RedirectToAction(nameof(Details), new { id });
         }
 
+        EquipmentRentalLifecycle.MarkReturned(rental, DateTime.UtcNow);
         await _db.SaveChangesAsync();
         TempData["Success"] = "Equipment marked as returned.";
         return RedirectToAction(nameof(Index));
@@ -427,34 +482,39 @@ public class EquipmentRentalsController : Controller
             return Forbid();
         }
 
-        // Members may delete only invalid/cancelled records; staff may delete invalid/cancelled/returned.
-        var deletable = rental.Status is EquipmentRentalStatus.Invalid or EquipmentRentalStatus.Cancelled
+        await SyncRentalStatusesAsync([rental]);
+
+        // Members may delete only invalid/cancelled/inactive records; staff may also delete returned.
+        var deletable = rental.Status is EquipmentRentalStatus.Invalid
+                            or EquipmentRentalStatus.Cancelled
+                            or EquipmentRentalStatus.Inactive
                         || (isStaff && rental.Status == EquipmentRentalStatus.Returned);
         if (!deletable)
         {
-            // Mark active overdue rentals as Invalid then allow cleanup, or block.
-            if (rental.Status == EquipmentRentalStatus.Active && rental.DueUtc < DateTime.UtcNow && isStaff)
+            // Mark not-returned overdue rentals as Invalid then allow cleanup, or block.
+            if (rental.Status == EquipmentRentalStatus.NotReturned && isStaff)
             {
-                if (rental.InventoryItem is not null)
-                {
-                    rental.InventoryItem.Quantity += rental.Quantity;
-                }
-
+                EquipmentRentalLifecycle.RestoreStock(rental);
                 rental.Status = EquipmentRentalStatus.Invalid;
                 await _db.SaveChangesAsync();
             }
 
-            if (rental.Status is not (EquipmentRentalStatus.Invalid or EquipmentRentalStatus.Cancelled)
+            if (rental.Status is not (EquipmentRentalStatus.Invalid
+                    or EquipmentRentalStatus.Cancelled
+                    or EquipmentRentalStatus.Inactive)
                 && !(isStaff && rental.Status == EquipmentRentalStatus.Returned))
             {
-                TempData["Error"] = "Only invalid or cancelled rental records can be deleted.";
+                TempData["Error"] = "Only invalid or inactive rental records can be deleted.";
                 return RedirectToAction(nameof(Details), new { id });
             }
         }
 
-        if (rental.Status == EquipmentRentalStatus.Active && rental.InventoryItem is not null)
+        if ((rental.Status is EquipmentRentalStatus.Active
+                or EquipmentRentalStatus.Rented
+                or EquipmentRentalStatus.NotReturned)
+            && rental.InventoryItem is not null)
         {
-            rental.InventoryItem.Quantity += rental.Quantity;
+            EquipmentRentalLifecycle.RestoreStock(rental);
         }
 
         _db.EquipmentRentals.Remove(rental);
@@ -475,9 +535,13 @@ public class EquipmentRentalsController : Controller
             return NotFound();
         }
 
-        if (rental.Status == EquipmentRentalStatus.Active && rental.InventoryItem is not null)
+        await SyncRentalStatusesAsync([rental]);
+
+        if (rental.Status is EquipmentRentalStatus.Active
+            or EquipmentRentalStatus.Rented
+            or EquipmentRentalStatus.NotReturned)
         {
-            rental.InventoryItem.Quantity += rental.Quantity;
+            EquipmentRentalLifecycle.RestoreStock(rental);
         }
 
         rental.Status = EquipmentRentalStatus.Invalid;
@@ -522,6 +586,7 @@ public class EquipmentRentalsController : Controller
 
     private async Task ForceCancelRentalAsync(EquipmentRental rental)
     {
+        // Only release reserved / not-yet-taken stock. Out-on-loan items stay tracked.
         if (rental.Status != EquipmentRentalStatus.Active)
         {
             return;
@@ -533,16 +598,30 @@ public class EquipmentRentalsController : Controller
         }
 
         rental.Status = EquipmentRentalStatus.Cancelled;
-        if (rental.InventoryItem is not null)
-        {
-            rental.InventoryItem.Quantity += rental.Quantity;
-        }
-
+        EquipmentRentalLifecycle.RestoreStock(rental);
         await _db.SaveChangesAsync();
     }
 
+    private async Task SyncRentalStatusesAsync(IEnumerable<EquipmentRental> rentals)
+    {
+        var now = DateTime.UtcNow;
+        var changed = false;
+        foreach (var rental in rentals)
+        {
+            if (EquipmentRentalLifecycle.ApplyTimeBasedTransitions(rental, now))
+            {
+                changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            await _db.SaveChangesAsync();
+        }
+    }
+
     private const string NoEligibleBookingMessage =
-        "You need an eligible facility booking before you can rent equipment. Book a facility first, then create a rental linked to that booking.";
+        "You are not allowed to have any equipment rental.";
 
     private async Task<bool> HasLinkableBookingAsync(string memberId) =>
         await _db.Bookings.AnyAsync(b =>

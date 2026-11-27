@@ -95,17 +95,7 @@ public class MemberController : Controller
                 .OrderByDescending(b => b.StartUtc)
                 .Take(10)
                 .ToListAsync(),
-            EquipmentRentals = await _db.EquipmentRentals
-                .Include(r => r.InventoryItem)!.ThenInclude(i => i!.Facility)
-                .Include(r => r.Booking)
-                .Where(r => r.MemberId == user.Id &&
-                            (r.Status == EquipmentRentalStatus.Active ||
-                             r.Status == EquipmentRentalStatus.Cancelled ||
-                             r.Status == EquipmentRentalStatus.Returned))
-                .OrderBy(r => r.Status == EquipmentRentalStatus.Active ? 0 : 1)
-                .ThenByDescending(r => r.CreatedAt)
-                .Take(10)
-                .ToListAsync(),
+            EquipmentRentals = await SyncMemberRentalsAsync(user.Id),
             Invoices = await _db.Invoices
                 .Where(i => i.UserId == user.Id)
                 .OrderByDescending(i => i.IssuedAt)
@@ -120,5 +110,39 @@ public class MemberController : Controller
         };
 
         return View(model);
+    }
+
+    private async Task<List<EquipmentRental>> SyncMemberRentalsAsync(string memberId)
+    {
+        var rentals = await _db.EquipmentRentals
+            .Include(r => r.InventoryItem)!.ThenInclude(i => i!.Facility)
+            .Include(r => r.Booking)
+            .Where(r => r.MemberId == memberId)
+            .OrderBy(r =>
+                r.Status == EquipmentRentalStatus.Active ||
+                r.Status == EquipmentRentalStatus.Rented ||
+                r.Status == EquipmentRentalStatus.NotReturned
+                    ? 0
+                    : 1)
+            .ThenByDescending(r => r.CreatedAt)
+            .Take(10)
+            .ToListAsync();
+
+        var now = DateTime.UtcNow;
+        var changed = false;
+        foreach (var rental in rentals)
+        {
+            if (EquipmentRentalLifecycle.ApplyTimeBasedTransitions(rental, now))
+            {
+                changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            await _db.SaveChangesAsync();
+        }
+
+        return rentals;
     }
 }

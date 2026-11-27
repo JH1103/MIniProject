@@ -445,7 +445,10 @@ public class BookingService
 
         // Reprice active equipment for the new window at full rate (no member discount).
         decimal equipmentTotal = 0m;
-        foreach (var rental in booking.EquipmentRentals.Where(r => r.Status == EquipmentRentalStatus.Active))
+        foreach (var rental in booking.EquipmentRentals.Where(r =>
+                     r.Status is EquipmentRentalStatus.Active
+                         or EquipmentRentalStatus.Rented
+                         or EquipmentRentalStatus.NotReturned))
         {
             rental.StartUtc = startUtc;
             rental.DueUtc = endUtc;
