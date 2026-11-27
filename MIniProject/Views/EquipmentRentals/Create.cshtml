@@ -7,13 +7,14 @@
     var locked = Model.ScheduleLocked;
     var hideBookingChooser = Model.LinkableBookingCount == 1;
     var requireBooking = Model.RequiresLinkedBooking;
+    var lines = Model.Lines is { Count: > 0 } ? Model.Lines : [new EquipmentRentalLineViewModel()];
 }
 
 <section class="section">
     <div class="container" style="max-width:720px">
         <div class="section-head">
             <h2>Create equipment rental</h2>
-            <p class="muted mb-0">Members only · must link an eligible facility booking · stock is reserved from facility inventory.</p>
+            <p class="muted mb-0">Members only · must link an eligible facility booking · rent multiple equipment types in one submit.</p>
         </div>
         <form asp-action="Create" method="post" class="panel" id="rentalCreateForm">
             @Html.AntiForgeryToken()
@@ -65,14 +66,59 @@
                     <label asp-for="DueTime" class="form-label"></label>
                     <input asp-for="DueTime" class="form-control schedule-field" placeholder="HH:mm" readonly="@locked" />
                 </div>
-                <div class="col-md-8">
-                    <label asp-for="InventoryItemId" class="form-label"></label>
-                    <select asp-for="InventoryItemId" class="form-select" id="equipmentSelect" asp-items="Model.EquipmentOptions"></select>
+
+                <div class="col-12">
+                    <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-2">
+                        <label class="form-label mb-0">Equipment lines <span class="text-danger">*</span></label>
+                        <button type="button" class="btn btn-ghost btn-sm" id="addRentalLine">+ Add line</button>
+                    </div>
+                    <span asp-validation-for="Lines" class="text-danger d-block mb-2"></span>
+                    <div id="rentalLines" class="rental-lines">
+                        @for (var i = 0; i < lines.Count; i++)
+                        {
+                            var selectedId = lines[i].InventoryItemId.ToString();
+                            <div class="rental-line row g-2 align-items-end" data-line-index="@i">
+                                <div class="col-md-7">
+                                    <label class="form-label" for="Lines_@(i)__InventoryItemId">Equipment</label>
+                                    <select name="Lines[@i].InventoryItemId"
+                                            id="Lines_@(i)__InventoryItemId"
+                                            class="form-select equipment-line-select">
+                                        @foreach (var opt in Model.EquipmentOptions)
+                                        {
+                                            if (opt.Value == selectedId)
+                                            {
+                                                <option value="@opt.Value" selected>@opt.Text</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@opt.Value">@opt.Text</option>
+                                            }
+                                        }
+                                    </select>
+                                    @Html.ValidationMessage($"Lines[{i}].InventoryItemId", new { @class = "text-danger" })
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label" for="Lines_@(i)__Quantity">Qty</label>
+                                    <input name="Lines[@i].Quantity"
+                                           id="Lines_@(i)__Quantity"
+                                           class="form-control"
+                                           type="number"
+                                           min="1"
+                                           max="50"
+                                           value="@lines[i].Quantity" />
+                                    @Html.ValidationMessage($"Lines[{i}].Quantity", new { @class = "text-danger" })
+                                </div>
+                                <div class="col-md-2">
+                                    <button type="button"
+                                            class="btn btn-ghost w-100 remove-rental-line"
+                                            aria-label="Remove line"
+                                            @(lines.Count <= 1 ? "disabled" : null)>Remove</button>
+                                </div>
+                            </div>
+                        }
+                    </div>
                 </div>
-                <div class="col-md-4">
-                    <label asp-for="Quantity" class="form-label"></label>
-                    <input asp-for="Quantity" class="form-control" />
-                </div>
+
                 <div class="col-12">
                     <label class="form-label">Equipment for this facility</label>
                     <div class="form-control bg-light" id="equipmentGuidance" style="min-height:4.5rem;white-space:pre-wrap">@Model.EquipmentGuidance</div>
@@ -88,18 +134,45 @@
     </div>
 </section>
 
+<template id="rentalLineTemplate">
+    <div class="rental-line row g-2 align-items-end" data-line-index="__INDEX__">
+        <div class="col-md-7">
+            <label class="form-label" for="Lines___INDEX____InventoryItemId">Equipment</label>
+            <select name="Lines[__INDEX__].InventoryItemId"
+                    id="Lines___INDEX____InventoryItemId"
+                    class="form-select equipment-line-select"></select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label" for="Lines___INDEX____Quantity">Qty</label>
+            <input name="Lines[__INDEX__].Quantity"
+                   id="Lines___INDEX____Quantity"
+                   class="form-control"
+                   type="number"
+                   min="1"
+                   max="50"
+                   value="1" />
+        </div>
+        <div class="col-md-2">
+            <button type="button" class="btn btn-ghost w-100 remove-rental-line" aria-label="Remove line">Remove</button>
+        </div>
+    </div>
+</template>
+
 @section Scripts {
 <script>
 (() => {
     const catalog = @Html.Raw(catalogJson);
     const schedules = @Html.Raw(schedulesJson);
     const requireBooking = @(requireBooking ? "true" : "false");
+    const postedSelections = @Html.Raw(JsonSerializer.Serialize(lines.Select(l => l.InventoryItemId).ToList()));
     const bookingSelect = document.getElementById('linkedBookingSelect');
-    const equipmentSelect = document.getElementById('equipmentSelect');
     const guidance = document.getElementById('equipmentGuidance');
     const notesHidden = document.getElementById('notesHidden');
     const hint = document.getElementById('linkedBookingHint');
     const form = document.getElementById('rentalCreateForm');
+    const linesRoot = document.getElementById('rentalLines');
+    const addBtn = document.getElementById('addRentalLine');
+    const lineTemplate = document.getElementById('rentalLineTemplate');
     const startDate = document.getElementById('StartDate');
     const startTime = document.getElementById('StartTime');
     const dueDate = document.getElementById('DueDate');
@@ -151,36 +224,74 @@
         return `For ${schedule.FacilityName}, you can rent: ${names.join(', ')}. Only inventory tied to this facility is shown below.`;
     }
 
-    function rebuildEquipment(facilityId, preferId) {
-        const current = preferId || equipmentSelect.value;
+    function equipmentOptionsHtml(facilityId, preferId) {
         const items = facilityId
             ? catalog.filter(i => i.FacilityId === facilityId)
             : catalog.slice();
 
-        equipmentSelect.innerHTML = '';
         if (!items.length) {
-            const opt = document.createElement('option');
-            opt.value = '';
-            opt.textContent = facilityId
+            const label = facilityId
                 ? '(No rentable equipment for this facility)'
                 : '(No equipment available)';
-            equipmentSelect.appendChild(opt);
-            return;
+            return `<option value="">${label}</option>`;
         }
 
-        items.forEach(item => {
-            const opt = document.createElement('option');
-            opt.value = String(item.Id);
-            opt.textContent = facilityId
+        return items.map(item => {
+            const selected = String(item.Id) === String(preferId) ? ' selected' : '';
+            const text = facilityId
                 ? `${item.Name} (qty ${item.Quantity})`
                 : `${item.FacilityName} · ${item.Name} (qty ${item.Quantity})`;
-            if (String(item.Id) === String(current)) opt.selected = true;
-            equipmentSelect.appendChild(opt);
-        });
+            return `<option value="${item.Id}"${selected}>${text}</option>`;
+        }).join('');
+    }
 
-        if (![...equipmentSelect.options].some(o => o.selected) && equipmentSelect.options.length) {
-            equipmentSelect.options[0].selected = true;
-        }
+    function currentFacilityId() {
+        const schedule = findSchedule(bookingSelect && bookingSelect.value);
+        return schedule ? schedule.FacilityId : null;
+    }
+
+    function rebuildAllEquipmentSelects(preferByIndex) {
+        const facilityId = currentFacilityId();
+        const selects = [...linesRoot.querySelectorAll('.equipment-line-select')];
+        selects.forEach((select, idx) => {
+            const prefer = (preferByIndex && preferByIndex[idx] != null)
+                ? preferByIndex[idx]
+                : select.value;
+            select.innerHTML = equipmentOptionsHtml(facilityId, prefer);
+            if (![...select.options].some(o => o.selected) && select.options.length) {
+                select.options[0].selected = true;
+            }
+        });
+    }
+
+    function reindexLines() {
+        const rows = [...linesRoot.querySelectorAll('.rental-line')];
+        rows.forEach((row, index) => {
+            row.dataset.lineIndex = String(index);
+            row.querySelectorAll('[name]').forEach(el => {
+                el.name = el.name.replace(/Lines\[\d+\]/, `Lines[${index}]`);
+            });
+            row.querySelectorAll('[id]').forEach(el => {
+                el.id = el.id.replace(/Lines_\d+__/, `Lines_${index}__`);
+            });
+            row.querySelectorAll('label[for]').forEach(el => {
+                el.htmlFor = el.htmlFor.replace(/Lines_\d+__/, `Lines_${index}__`);
+            });
+            const removeBtn = row.querySelector('.remove-rental-line');
+            if (removeBtn) removeBtn.disabled = rows.length <= 1;
+        });
+    }
+
+    function addLine(preferId) {
+        const index = linesRoot.querySelectorAll('.rental-line').length;
+        const html = lineTemplate.innerHTML.replaceAll('__INDEX__', String(index));
+        const wrap = document.createElement('div');
+        wrap.innerHTML = html.trim();
+        const row = wrap.firstElementChild;
+        const select = row.querySelector('.equipment-line-select');
+        select.innerHTML = equipmentOptionsHtml(currentFacilityId(), preferId);
+        linesRoot.appendChild(row);
+        reindexLines();
     }
 
     function applyLinkedBooking() {
@@ -194,21 +305,43 @@
             const text = buildGuidance(schedule);
             guidance.textContent = text;
             notesHidden.value = text;
-            rebuildEquipment(schedule.FacilityId);
+            rebuildAllEquipmentSelects(postedSelections);
         } else {
             setScheduleLocked(false);
             guidance.textContent = defaultGuidance;
             notesHidden.value = '';
-            rebuildEquipment(null, equipmentSelect.value);
+            rebuildAllEquipmentSelects(postedSelections);
         }
     }
 
+    if (addBtn) {
+        addBtn.addEventListener('click', () => addLine(null));
+    }
+
+    if (linesRoot) {
+        linesRoot.addEventListener('click', (e) => {
+            const btn = e.target.closest('.remove-rental-line');
+            if (!btn || btn.disabled) return;
+            const row = btn.closest('.rental-line');
+            if (row) row.remove();
+            reindexLines();
+        });
+    }
+
     if (bookingSelect && bookingSelect.tagName === 'SELECT') {
-        bookingSelect.addEventListener('change', applyLinkedBooking);
+        bookingSelect.addEventListener('change', () => {
+            // After booking change, prefer keeping current selections where still valid.
+            const current = [...linesRoot.querySelectorAll('.equipment-line-select')].map(s => s.value);
+            applyLinkedBooking();
+            rebuildAllEquipmentSelects(current);
+        });
     }
     if (bookingSelect && bookingSelect.value) {
         applyLinkedBooking();
+    } else {
+        rebuildAllEquipmentSelects(postedSelections);
     }
+    reindexLines();
 
     if (form && requireBooking) {
         form.addEventListener('submit', (e) => {
@@ -220,6 +353,13 @@
                     bookingSelect.reportValidity();
                     bookingSelect.setCustomValidity('');
                 }
+                return;
+            }
+
+            const rows = linesRoot.querySelectorAll('.rental-line');
+            if (!rows.length) {
+                e.preventDefault();
+                alert('Add at least one equipment line.');
             }
         });
     }
