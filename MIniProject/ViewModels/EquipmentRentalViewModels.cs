@@ -44,7 +44,7 @@ public class EquipmentRentalFormViewModel
     /// <summary>When true (member create), a linked booking is required — no orphan rentals.</summary>
     public bool RequiresLinkedBooking { get; set; }
 
-    /// <summary>Count of non-cancelled linkable bookings for this member (excludes the empty chooser option).</summary>
+    /// <summary>Count of future/current (not yet ended) linkable bookings for this member.</summary>
     public int LinkableBookingCount { get; set; }
 
     /// <summary>Display label when exactly one booking is auto-selected (chooser hidden).</summary>

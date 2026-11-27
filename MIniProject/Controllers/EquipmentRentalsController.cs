@@ -117,7 +117,7 @@ public class EquipmentRentalsController : Controller
             return RedirectToAction("Plans", "Membership");
         }
 
-        // Members may only create rentals linked to an eligible (non-cancelled, upcoming) booking.
+        // Members may only create rentals linked to an eligible future/current booking.
         var linkableBookings = await LoadLinkableBookingsAsync(user.Id);
         if (linkableBookings.Count == 0)
         {
@@ -623,13 +623,17 @@ public class EquipmentRentalsController : Controller
     private const string NoEligibleBookingMessage =
         "You are not allowed to have any equipment rental.";
 
+    /// <summary>
+    /// Eligible linked bookings are non-cancelled / non-completed / non-no-show
+    /// slots whose end time has not yet passed (future or currently in progress).
+    /// </summary>
     private async Task<bool> HasLinkableBookingAsync(string memberId) =>
         await _db.Bookings.AnyAsync(b =>
             b.MemberId == memberId &&
             b.Status != BookingStatus.Cancelled &&
             b.Status != BookingStatus.Completed &&
             b.Status != BookingStatus.NoShow &&
-            b.StartUtc >= DateTime.UtcNow.Date.AddDays(-1));
+            b.EndUtc >= DateTime.UtcNow);
 
     private async Task<List<Booking>> LoadLinkableBookingsAsync(string memberId) =>
         await _db.Bookings
@@ -638,7 +642,7 @@ public class EquipmentRentalsController : Controller
                         b.Status != BookingStatus.Cancelled &&
                         b.Status != BookingStatus.Completed &&
                         b.Status != BookingStatus.NoShow &&
-                        b.StartUtc >= DateTime.UtcNow.Date.AddDays(-1))
+                        b.EndUtc >= DateTime.UtcNow)
             .OrderBy(b => b.StartUtc)
             .ToListAsync();
 
