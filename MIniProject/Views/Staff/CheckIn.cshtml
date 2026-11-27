@@ -97,12 +97,22 @@
                                 <div class="small text-uppercase muted fw-semibold">Scanned details</div>
                                 <strong>@preview.DisplayName</strong>
                                 <div class="small muted">
-                                    @(preview.IsMember ? $"Member card · {preview.PlanName}" : $"Guest pass · {preview.PassCode}")
+                                    @(preview.IsMember ? "Member card" : $"Guest pass · {preview.PassCode}")
                                     @if (!string.IsNullOrWhiteSpace(preview.Identification))
                                     {
                                         <span> · @preview.Identification</span>
                                     }
                                 </div>
+                                @if (preview.IsMember)
+                                {
+                                    <div class="small muted">
+                                        Membership plan · @(string.IsNullOrWhiteSpace(preview.PlanName) ? "Unknown" : preview.PlanName)
+                                        @if (preview.PlanValidUntil is DateTime planUntil)
+                                        {
+                                            <span> · active until @planUntil.ToString("dd MMM yyyy")</span>
+                                        }
+                                    </div>
+                                }
 
                                 <div class="mt-3">
                                     <div class="small text-uppercase muted fw-semibold mb-1">Today's booking(s)</div>
@@ -162,7 +172,11 @@
                                 @if (lastMember is not null)
                                 {
                                     <strong>@lastMember.FullName</strong>
-                                    <div class="small muted">Member card · @ViewBag.LastMemberPlan</div>
+                                    <div class="small muted">Member card</div>
+                                    @if (ViewBag.LastMemberPlan is string lastPlan && !string.IsNullOrWhiteSpace(lastPlan))
+                                    {
+                                        <div class="small muted">Membership plan · @lastPlan</div>
+                                    }
                                 }
                                 else if (lastGuest is not null)
                                 {

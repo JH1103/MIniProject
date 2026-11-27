@@ -8,6 +8,7 @@ public class CheckInPreviewViewModel
     public bool IsMember { get; set; }
     public string DisplayName { get; set; } = string.Empty;
     public string? PlanName { get; set; }
+    public DateTime? PlanValidUntil { get; set; }
     public string? Identification { get; set; }
 
     public bool AlreadyInside { get; set; }

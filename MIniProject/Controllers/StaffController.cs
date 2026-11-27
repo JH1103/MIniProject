@@ -180,6 +180,7 @@ public class StaffController : Controller
             IsMember = true,
             DisplayName = member.FullName,
             PlanName = activeSub.MembershipPlan?.Name,
+            PlanValidUntil = activeSub.EndDate,
             Identification = member.IdentificationNumber,
             AlreadyInside = alreadyIn,
             CanCheckIn = canCheckIn && !alreadyIn,
