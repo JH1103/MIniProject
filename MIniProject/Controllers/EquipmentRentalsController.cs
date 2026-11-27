@@ -39,7 +39,7 @@ public class EquipmentRentalsController : Controller
         var query = _db.EquipmentRentals
             .Include(r => r.InventoryItem)!.ThenInclude(i => i!.Facility)
             .Include(r => r.Member)
-            .Include(r => r.Booking)
+            .Include(r => r.Booking)!.ThenInclude(b => b!.Invoice)
             .AsQueryable();
 
         if (!isStaff)
@@ -54,6 +54,11 @@ public class EquipmentRentalsController : Controller
 
         var rentals = await query.OrderByDescending(r => r.CreatedAt).Take(100).ToListAsync();
         await SyncRentalStatusesAsync(rentals);
+        if (isStaff)
+        {
+            ViewBag.PickupBlockedUnpaidIds = await GetPickupBlockedUnpaidIdsAsync(rentals);
+        }
+
         return View(rentals);
     }
 
@@ -72,6 +77,7 @@ public class EquipmentRentalsController : Controller
 
         await SyncRentalStatusesAsync([rental]);
         ViewBag.UnpaidInvoiceId = await FindUnpaidEquipmentInvoiceIdAsync(rental);
+        ViewBag.PickupBlockedUnpaid = await IsPickupBlockedForUnpaidAsync(rental);
         return View(rental);
     }
 
@@ -463,6 +469,15 @@ public class EquipmentRentalsController : Controller
                 return View(await BuildFormAsync(rental.MemberId, model));
             }
 
+            // Confirming pickup via status override requires payment, same as MarkPickedUp.
+            if (model.Status == EquipmentRentalStatus.Rented &&
+                rental.Status != EquipmentRentalStatus.Rented &&
+                await IsPickupBlockedForUnpaidAsync(rental))
+            {
+                ModelState.AddModelError(nameof(model.Status), PickupBlockedUnpaidMessage);
+                return View(await BuildFormAsync(rental.MemberId, model));
+            }
+
             if (model.Status == EquipmentRentalStatus.Rented && rental.PickedUpAt is null)
             {
                 rental.PickedUpAt = DateTime.UtcNow;
@@ -530,6 +545,7 @@ public class EquipmentRentalsController : Controller
     {
         var rental = await _db.EquipmentRentals
             .Include(r => r.InventoryItem)
+            .Include(r => r.Booking)!.ThenInclude(b => b!.Invoice)
             .FirstOrDefaultAsync(r => r.Id == id);
         if (rental is null)
         {
@@ -548,6 +564,12 @@ public class EquipmentRentalsController : Controller
         if (!EquipmentRentalLifecycle.CanMarkPickedUp(rental.Status))
         {
             TempData["Error"] = "Only awaiting-pickup rentals can be marked as taken.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        if (await IsPickupBlockedForUnpaidAsync(rental))
+        {
+            TempData["Error"] = PickupBlockedUnpaidMessage;
             return RedirectToAction(nameof(Details), new { id });
         }
 
@@ -686,6 +708,9 @@ public class EquipmentRentalsController : Controller
             .Include(r => r.Booking)!.ThenInclude(b => b!.Invoice)
             .FirstOrDefaultAsync(r => r.Id == id);
 
+    private const string PickupBlockedUnpaidMessage =
+        "Cannot confirm pickup — the member has not paid for this equipment rental.";
+
     /// <summary>
     /// Unpaid invoice covering this rental: linked booking invoice, or standalone EQ invoice.
     /// </summary>
@@ -723,6 +748,61 @@ public class EquipmentRentalsController : Controller
             .FirstOrDefaultAsync();
 
         return standalone;
+    }
+
+    /// <summary>
+    /// Pickup is blocked while equipment charges are unpaid (booking or standalone EQ invoice),
+    /// or when a positive fee has no paid invoice covering it yet.
+    /// </summary>
+    private async Task<bool> IsPickupBlockedForUnpaidAsync(EquipmentRental rental)
+    {
+        if (await FindUnpaidEquipmentInvoiceIdAsync(rental) is not null)
+        {
+            return true;
+        }
+
+        if (rental.Fee <= 0)
+        {
+            return false;
+        }
+
+        // Positive fee with a paid booking invoice that already covers equipment.
+        if (rental.Booking?.Invoice is { Status: InvoiceStatus.Paid })
+        {
+            return false;
+        }
+
+        if (rental.BookingId is not int bookingId)
+        {
+            // Orphan fee with no booking/invoice path — treat as unpaid.
+            return true;
+        }
+
+        var marker = $"booking #{bookingId}";
+        var hasPaidCoveringInvoice = await _db.Invoices
+            .AsNoTracking()
+            .AnyAsync(i =>
+                i.UserId == rental.MemberId &&
+                i.Status == InvoiceStatus.Paid &&
+                (i.BookingId == bookingId ||
+                 (i.BookingId == null && i.Description.Contains(marker))));
+
+        // Fee > 0 and nothing paid yet (e.g. pending approval, no invoice issued).
+        return !hasPaidCoveringInvoice;
+    }
+
+    private async Task<HashSet<int>> GetPickupBlockedUnpaidIdsAsync(IEnumerable<EquipmentRental> rentals)
+    {
+        var blocked = new HashSet<int>();
+        foreach (var rental in rentals.Where(r => EquipmentRentalLifecycle.CanMarkPickedUp(r.Status)))
+        {
+            if (await IsPickupBlockedForUnpaidAsync(rental))
+            {
+                blocked.Add(rental.Id);
+            }
+        }
+
+        return blocked;
     }
 
     private async Task<bool> CanAccessAsync(EquipmentRental rental)

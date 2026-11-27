@@ -14,6 +14,7 @@
         || (isStaff && Model.Status == EquipmentRentalStatus.Returned);
     var canCancel = EquipmentRentalLifecycle.CanCancel(Model.Status);
     var unpaidInvoiceId = ViewBag.UnpaidInvoiceId as int?;
+    var pickupBlockedUnpaid = ViewBag.PickupBlockedUnpaid is true;
 }
 
 <section class="section">
@@ -37,11 +38,18 @@
                 <div class="col-12"><strong>Notes</strong><div>@(Model.Notes ?? "—")</div></div>
             </div>
 
-            @if (unpaidInvoiceId is int payId && Model.Status == EquipmentRentalStatus.Active)
+            @if (pickupBlockedUnpaid && Model.Status == EquipmentRentalStatus.Active)
             {
                 <div class="alert alert-warning mt-3 mb-0" role="status">
-                    Payment is outstanding for this equipment rental.
-                    <a class="alert-link" asp-controller="Payments" asp-action="Pay" asp-route-id="@payId">Pay invoice now</a>
+                    @if (unpaidInvoiceId is int payId)
+                    {
+                        <text>Payment is outstanding for this equipment rental. Pickup cannot be confirmed until the member pays.</text>
+                        <a class="alert-link" asp-controller="Payments" asp-action="Pay" asp-route-id="@payId">Pay invoice now</a>
+                    }
+                    else
+                    {
+                        <text>The member has not paid for this equipment rental. Pickup cannot be confirmed until payment is completed.</text>
+                    }
                 </div>
             }
 
@@ -64,11 +72,19 @@
                 }
                 @if (isStaff && EquipmentRentalLifecycle.CanMarkPickedUp(Model.Status))
                 {
-                    <form asp-action="MarkPickedUp" method="post">
-                        @Html.AntiForgeryToken()
-                        <input type="hidden" name="id" value="@Model.Id" />
-                        <button class="btn btn-primary" type="submit">Confirm taken / pickup</button>
-                    </form>
+                    @if (pickupBlockedUnpaid)
+                    {
+                        <button class="btn btn-primary" type="button" disabled title="Member has not paid for this equipment rental.">Confirm taken / pickup</button>
+                        <p class="text-danger mb-0 align-self-center">Unpaid — pickup blocked until the member pays.</p>
+                    }
+                    else
+                    {
+                        <form asp-action="MarkPickedUp" method="post">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@Model.Id" />
+                            <button class="btn btn-primary" type="submit">Confirm taken / pickup</button>
+                        </form>
+                    }
                 }
                 @if (EquipmentRentalLifecycle.CanMarkReturned(Model.Status))
                 {

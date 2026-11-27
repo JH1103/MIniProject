@@ -1,9 +1,11 @@
 @model List<EquipmentRental>
+@using System.Collections.Generic
 @{
     ViewData["Title"] = "Equipment rentals";
     var isStaff = User.IsInRole(AppRoles.Staff) || User.IsInRole(AppRoles.Administrator);
     var isMember = User.IsInRole(AppRoles.Member);
     var canCreateRental = isMember && ViewBag.CanCreateRental is true;
+    var pickupBlockedUnpaidIds = ViewBag.PickupBlockedUnpaidIds as HashSet<int> ?? new HashSet<int>();
 }
 
 <section class="section">
@@ -106,11 +108,18 @@
                                     @if (isStaff && EquipmentRentalLifecycle.CanMarkPickedUp(rental.Status))
                                     {
                                         <text> · </text>
-                                        <form asp-action="MarkPickedUp" method="post" class="d-inline">
-                                            @Html.AntiForgeryToken()
-                                            <input type="hidden" name="id" value="@rental.Id" />
-                                            <button class="btn btn-link p-0 align-baseline" type="submit">Mark taken</button>
-                                        </form>
+                                        @if (pickupBlockedUnpaidIds.Contains(rental.Id))
+                                        {
+                                            <span class="text-danger small" title="Member has not paid for this equipment rental.">Unpaid — pickup blocked</span>
+                                        }
+                                        else
+                                        {
+                                            <form asp-action="MarkPickedUp" method="post" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="id" value="@rental.Id" />
+                                                <button class="btn btn-link p-0 align-baseline" type="submit">Mark taken</button>
+                                            </form>
+                                        }
                                     }
                                     @if (EquipmentRentalLifecycle.CanMarkReturned(rental.Status))
                                     {
