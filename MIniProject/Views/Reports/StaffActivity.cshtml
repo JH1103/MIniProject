@@ -65,7 +65,7 @@
                     <select id="ActionType" class="form-select" name="ActionType">
                         @foreach (var opt in Html.GetEnumSelectList<StaffActivityActionType>())
                         {
-                            <option value="@opt.Value" @(opt.Value == ((int)filter.ActionType).ToString() ? "selected" : null)>@opt.Text</option>
+                            <option value="@opt.Value" selected="@(opt.Value == ((int)filter.ActionType).ToString())">@opt.Text</option>
                         }
                     </select>
                 </div>
