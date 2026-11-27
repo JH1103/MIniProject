@@ -29,7 +29,7 @@
         <div class="admin-hero mb-4">
             <div class="admin-hero__copy">
                 <div class="admin-hero__eyebrow">Home · Operations overview</div>
-                <span class="badge-soft">Admin &amp; staff</span>
+                <span class="badge-soft">Administrator</span>
                 <h1>Clubhouse statistics</h1>
                 <p class="mb-0">Bookings, equipment rentals, facility demand and top members — @windowLabel.</p>
             </div>
@@ -52,19 +52,6 @@
                 </div>
             </div>
         </div>
-
-        <nav class="admin-ops-links mb-4" aria-label="Admin operations">
-            <a class="is-active" asp-controller="Home" asp-action="Index">Home dashboard</a>
-            @if (User.IsInRole(AppRoles.Administrator))
-            {
-                <a asp-controller="Admin" asp-action="Index">Admin governance</a>
-                <a asp-controller="Reports" asp-action="Index">Reports &amp; analytics</a>
-            }
-            @if (User.IsInRole(AppRoles.Staff) || User.IsInRole(AppRoles.Administrator))
-            {
-                <a asp-controller="Staff" asp-action="CheckIn">Staff check-in</a>
-            }
-        </nav>
 
         <div class="row g-4">
             <div class="col-lg-7">

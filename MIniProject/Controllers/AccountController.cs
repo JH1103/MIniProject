@@ -101,7 +101,7 @@ public class AccountController : Controller
         var user = await _userManager.FindByEmailAsync(model.Email);
         if (user is not null && await _userManager.IsInRoleAsync(user, AppRoles.Administrator))
         {
-            return RedirectToAction("Index", "Admin");
+            return RedirectToAction("Index", "Home");
         }
 
         if (user is not null && await _userManager.IsInRoleAsync(user, AppRoles.Staff))
