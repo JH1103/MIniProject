@@ -281,6 +281,149 @@ public class ReportService
         };
     }
 
+    /// <summary>
+    /// Aggregates booking, rental, facility, and member activity charts for the admin/staff home dashboard.
+    /// Uses the last <paramref name="windowDays"/> days (UTC) ending now.
+    /// </summary>
+    public async Task<AdminHomeDashboardViewModel> GetAdminHomeDashboardAsync(
+        int windowDays = 90,
+        CancellationToken ct = default)
+    {
+        windowDays = Math.Clamp(windowDays, 7, 365);
+        var endUtc = DateTime.UtcNow;
+        var startUtc = endUtc.Date.AddDays(-(windowDays - 1));
+
+        var bookingsInWindow = await _db.Bookings
+            .AsNoTracking()
+            .Where(b => b.CreatedAt >= startUtc && b.CreatedAt <= endUtc)
+            .Select(b => new { b.CreatedAt, b.Status, b.FacilityId, FacilityName = b.Facility!.Name, b.MemberId, MemberName = b.Member!.FullName })
+            .ToListAsync(ct);
+
+        var rentalsInWindow = await _db.EquipmentRentals
+            .AsNoTracking()
+            .Where(r => r.CreatedAt >= startUtc && r.CreatedAt <= endUtc
+                        && r.Status != EquipmentRentalStatus.Cancelled
+                        && r.Status != EquipmentRentalStatus.Invalid)
+            .Select(r => new
+            {
+                EquipmentName = r.InventoryItem != null ? r.InventoryItem.Name : "(unknown)",
+                Quantity = r.Quantity
+            })
+            .ToListAsync(ct);
+
+        var checkInsInWindow = await _db.MemberCheckIns
+            .AsNoTracking()
+            .Where(c => c.CheckedInAt >= startUtc && c.CheckedInAt <= endUtc)
+            .Select(c => new { c.MemberId, MemberName = c.Member!.FullName })
+            .ToListAsync(ct);
+
+        var bookingsByDayLookup = bookingsInWindow
+            .GroupBy(b => b.CreatedAt.Date)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        var bookingsByDay = new List<NamedCountStat>();
+        for (var day = startUtc.Date; day <= endUtc.Date; day = day.AddDays(1))
+        {
+            bookingsByDay.Add(new NamedCountStat
+            {
+                Label = day.ToString("dd MMM"),
+                Count = bookingsByDayLookup.GetValueOrDefault(day)
+            });
+        }
+
+        // Collapse dense daily bars for long windows: weekly buckets when > 45 days.
+        if (windowDays > 45)
+        {
+            bookingsByDay = bookingsInWindow
+                .GroupBy(b =>
+                {
+                    var d = b.CreatedAt.Date;
+                    var offset = (int)(d - startUtc.Date).TotalDays;
+                    var weekStart = startUtc.Date.AddDays(offset - (offset % 7));
+                    return weekStart;
+                })
+                .OrderBy(g => g.Key)
+                .Select(g => new NamedCountStat
+                {
+                    Label = g.Key.ToString("dd MMM"),
+                    Count = g.Count()
+                })
+                .ToList();
+        }
+
+        var bookingsByStatus = bookingsInWindow
+            .GroupBy(b => b.Status.ToString())
+            .OrderByDescending(g => g.Count())
+            .Select(g => new NamedCountStat { Label = g.Key, Count = g.Count() })
+            .ToList();
+
+        var rentalsByEquipment = rentalsInWindow
+            .GroupBy(r => r.EquipmentName)
+            .Select(g => new NamedCountStat
+            {
+                Label = g.Key,
+                Count = g.Sum(x => Math.Max(1, x.Quantity))
+            })
+            .OrderByDescending(x => x.Count)
+            .Take(10)
+            .ToList();
+
+        var facilityUsage = bookingsInWindow
+            .Where(b => b.Status != BookingStatus.Cancelled)
+            .GroupBy(b => b.FacilityName)
+            .Select(g => new NamedCountStat { Label = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .Take(10)
+            .ToList();
+
+        var bookingCountsByMember = bookingsInWindow
+            .Where(b => b.Status != BookingStatus.Cancelled)
+            .GroupBy(b => new { b.MemberId, b.MemberName })
+            .ToDictionary(g => g.Key.MemberId, g => (Name: g.Key.MemberName, Count: g.Count()));
+
+        var checkInCountsByMember = checkInsInWindow
+            .GroupBy(c => new { c.MemberId, c.MemberName })
+            .ToDictionary(g => g.Key.MemberId, g => (Name: g.Key.MemberName, Count: g.Count()));
+
+        var memberIds = bookingCountsByMember.Keys.Union(checkInCountsByMember.Keys);
+        var topMembers = memberIds
+            .Select(id =>
+            {
+                bookingCountsByMember.TryGetValue(id, out var bookings);
+                checkInCountsByMember.TryGetValue(id, out var checkIns);
+                return new TopMemberStat
+                {
+                    MemberName = !string.IsNullOrWhiteSpace(bookings.Name)
+                        ? bookings.Name
+                        : (!string.IsNullOrWhiteSpace(checkIns.Name) ? checkIns.Name : "(unknown)"),
+                    BookingCount = bookings.Count,
+                    CheckInCount = checkIns.Count
+                };
+            })
+            .OrderByDescending(m => m.TotalActivity)
+            .ThenByDescending(m => m.BookingCount)
+            .Take(8)
+            .ToList();
+
+        var activeFacilities = await _db.Facilities.CountAsync(f => f.IsActive, ct);
+
+        return new AdminHomeDashboardViewModel
+        {
+            WindowDays = windowDays,
+            WindowStartUtc = startUtc,
+            WindowEndUtc = endUtc,
+            BookingsInWindow = bookingsInWindow.Count,
+            RentalsInWindow = rentalsInWindow.Count,
+            CheckInsInWindow = checkInsInWindow.Count,
+            ActiveFacilities = activeFacilities,
+            BookingsByDay = bookingsByDay,
+            BookingsByStatus = bookingsByStatus,
+            RentalsByEquipment = rentalsByEquipment,
+            FacilityUsage = facilityUsage,
+            TopMembers = topMembers
+        };
+    }
+
     private async Task<List<SelectListItem>> BuildStaffOptionsAsync(string? selectedStaffId, CancellationToken ct)
     {
         var staff = await _userManager.GetUsersInRoleAsync(AppRoles.Staff);
