@@ -1,0 +1,126 @@
+@model StaffActivityReportViewModel
+@{
+    ViewData["Title"] = "Staff activity report";
+    var filter = Model.Filter;
+}
+
+<section class="section">
+    <div class="container">
+        <div class="reports-hero mb-4">
+            <div>
+                <div class="admin-hero__eyebrow">Module 6 · Reporting &amp; analytics management</div>
+                <span class="badge-soft">Top management</span>
+                <h2 class="mt-2 mb-1">Staff / admin activity audit</h2>
+                <p class="muted mb-0">Who helped members check in, and who marked equipment taken / picked up.</p>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+                <a class="btn btn-ghost" asp-action="Index">Back to dashboard</a>
+                <a class="btn btn-primary"
+                   asp-action="ExportStaffActivity"
+                   asp-route-FromDate="@filter.FromDate?.ToString("yyyy-MM-dd")"
+                   asp-route-ToDate="@filter.ToDate?.ToString("yyyy-MM-dd")"
+                   asp-route-StaffUserId="@filter.StaffUserId"
+                   asp-route-MemberQuery="@filter.MemberQuery"
+                   asp-route-ActionType="@filter.ActionType">Export CSV</a>
+            </div>
+        </div>
+
+        <div class="stat-row mb-4">
+            <div class="stat">
+                <span class="muted">Total actions</span>
+                <strong>@Model.TotalCount</strong>
+                <div class="small muted">In selected filters</div>
+            </div>
+            <div class="stat">
+                <span class="muted">Member check-ins</span>
+                <strong>@Model.MemberCheckInCount</strong>
+            </div>
+            <div class="stat">
+                <span class="muted">Guest check-ins</span>
+                <strong>@Model.GuestCheckInCount</strong>
+            </div>
+            <div class="stat">
+                <span class="muted">Equipment taken</span>
+                <strong>@Model.EquipmentPickupCount</strong>
+            </div>
+        </div>
+
+        <div class="panel mb-4">
+            <h3 class="h5 mb-3">Filters</h3>
+            <form method="get" asp-action="StaffActivity" class="row g-3 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label" for="FromDate">From</label>
+                    <input id="FromDate" class="form-control" type="date" name="FromDate" value="@filter.FromDate?.ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label" for="ToDate">To</label>
+                    <input id="ToDate" class="form-control" type="date" name="ToDate" value="@filter.ToDate?.ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="StaffUserId">Staff / admin</label>
+                    <select id="StaffUserId" class="form-select" name="StaffUserId" asp-items="filter.StaffOptions"></select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label" for="ActionType">Action type</label>
+                    <select id="ActionType" class="form-select" name="ActionType">
+                        @foreach (var opt in Html.GetEnumSelectList<StaffActivityActionType>())
+                        {
+                            <option value="@opt.Value" @(opt.Value == ((int)filter.ActionType).ToString() ? "selected" : null)>@opt.Text</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label" for="MemberQuery">Member</label>
+                    <input id="MemberQuery" class="form-control" name="MemberQuery" value="@filter.MemberQuery" placeholder="Name…" />
+                </div>
+                <div class="col-md-1">
+                    <button type="submit" class="btn btn-primary w-100">Apply</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="panel">
+            <h3 class="h5">Activity log</h3>
+            @if (Model.Rows.Count == 0)
+            {
+                <p class="muted mb-0">No staff/admin actions match these filters.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table mb-0">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Staff / admin</th>
+                                <th>Member / guest</th>
+                                <th>Booking / rental</th>
+                                <th>Action</th>
+                                <th>Detail</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var row in Model.Rows)
+                        {
+                            <tr>
+                                <td>@row.OccurredAtUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm")</td>
+                                <td>
+                                    <div>@row.StaffName</div>
+                                    @if (!string.IsNullOrWhiteSpace(row.StaffUserId))
+                                    {
+                                        <div class="small muted">@row.StaffUserId</div>
+                                    }
+                                </td>
+                                <td>@row.MemberName</td>
+                                <td>@row.Reference</td>
+                                <td>@row.ActionType</td>
+                                <td>@row.Detail</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</section>

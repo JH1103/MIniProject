@@ -274,6 +274,7 @@ public class StaffController : Controller
             {
                 open.CheckedOutAt = DateTime.UtcNow;
                 open.CheckedOutByUserId = staffUserId;
+                open.CheckedOutByName = await ResolveStaffNameAsync(staffUserId);
                 open.Status = ClearanceStatus.CheckedOut;
                 await _db.SaveChangesAsync();
                 TempData["Success"] = $"Checked out guest {pass.Guest?.FullName}.";
@@ -301,11 +302,13 @@ public class StaffController : Controller
             return;
         }
 
+        var staffName = await ResolveStaffNameAsync(staffUserId);
         _db.CheckInRecords.Add(new CheckInRecord
         {
             VisitorPassId = pass.Id,
             CheckedInAt = DateTime.UtcNow,
             CheckedInByUserId = staffUserId,
+            CheckedInByName = staffName,
             Status = ClearanceStatus.UsingFacility
         });
         await _db.SaveChangesAsync();
@@ -344,6 +347,7 @@ public class StaffController : Controller
             {
                 open.CheckedOutAt = DateTime.UtcNow;
                 open.CheckedOutByUserId = staffUserId;
+                open.CheckedOutByName = await ResolveStaffNameAsync(staffUserId);
                 open.Status = ClearanceStatus.CheckedOut;
                 await _db.SaveChangesAsync();
                 TempData["Success"] = $"Checked out member {member.FullName}.";
@@ -381,6 +385,7 @@ public class StaffController : Controller
             return;
         }
 
+        var staffName = await ResolveStaffNameAsync(staffUserId);
         _db.MemberCheckIns.Add(new MemberCheckIn
         {
             MemberId = memberId,
@@ -388,6 +393,7 @@ public class StaffController : Controller
             FacilityId = selectedBooking.FacilityId,
             CheckedInAt = DateTime.UtcNow,
             CheckedInByUserId = staffUserId,
+            CheckedInByName = staffName,
             Status = ClearanceStatus.UsingFacility
         });
         await _db.SaveChangesAsync();
@@ -397,6 +403,14 @@ public class StaffController : Controller
         ViewBag.LastMember = member;
         ViewBag.LastMemberPlan = activeSub.MembershipPlan?.Name;
         ViewBag.ScanPreview = null;
+    }
+
+    private async Task<string?> ResolveStaffNameAsync(string staffUserId)
+    {
+        return await _db.Users
+            .Where(u => u.Id == staffUserId)
+            .Select(u => u.FullName)
+            .FirstOrDefaultAsync();
     }
 
     private async Task<List<Booking>> GetTodayBookingsForMemberAsync(string memberId)
