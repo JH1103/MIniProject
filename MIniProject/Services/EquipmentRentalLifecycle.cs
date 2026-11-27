@@ -5,7 +5,7 @@ namespace MIniProject.Services;
 /// <summary>
 /// Pickup / overdue rules for equipment rentals:
 /// Active (awaiting pickup) → Inactive if not picked up within 15 minutes of start;
-/// staff mark taken → Rented; due passed while out → NotReturned;
+/// staff mark taken → Rented (only when equipment rental is paid); due passed while out → NotReturned;
 /// Return is only allowed while Rented.
 /// </summary>
 public static class EquipmentRentalLifecycle
