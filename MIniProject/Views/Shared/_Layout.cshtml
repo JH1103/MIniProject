@@ -42,7 +42,11 @@
                         @* Admin chrome: hide Facilities / Membership / Contact / My Dashboard / Staff dashboard *@
                         @if (!(SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Administrator)))
                         {
-                            <li class="nav-item"><a class="nav-link" asp-controller="Facilities" asp-action="Index">Facilities</a></li>
+                            @* Staff do not browse the public Facilities catalogue *@
+                            @if (!(SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Staff)))
+                            {
+                                <li class="nav-item"><a class="nav-link" asp-controller="Facilities" asp-action="Index">Facilities</a></li>
+                            }
                             @if (SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Staff))
                             {
                                 <li class="nav-item"><a class="nav-link" asp-controller="Staff" asp-action="Membership">Membership</a></li>
@@ -131,7 +135,11 @@
             <ul class="navbar-nav site-nav__links">
                 @if (!(SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Administrator)))
                 {
-                    <li class="nav-item"><a class="nav-link" asp-controller="Facilities" asp-action="Index">Facilities</a></li>
+                    @* Staff do not browse the public Facilities catalogue *@
+                    @if (!(SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Staff)))
+                    {
+                        <li class="nav-item"><a class="nav-link" asp-controller="Facilities" asp-action="Index">Facilities</a></li>
+                    }
                     @if (SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Staff))
                     {
                         <li class="nav-item"><a class="nav-link" asp-controller="Staff" asp-action="Membership">Membership</a></li>

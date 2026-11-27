@@ -19,6 +19,11 @@ public class FacilitiesController : Controller
 
     public async Task<IActionResult> Index(string? category, string? mode)
     {
+        if (IsStaffWithoutAdmin())
+        {
+            return RedirectToAction("Index", "Staff");
+        }
+
         var selectedMode = NormalizeMode(mode);
         var query = _db.Facilities.Where(f => f.IsActive).AsQueryable();
 
@@ -44,6 +49,11 @@ public class FacilitiesController : Controller
 
     public async Task<IActionResult> Details(int id, DateTime? date)
     {
+        if (IsStaffWithoutAdmin())
+        {
+            return RedirectToAction("Index", "Staff");
+        }
+
         var facility = await _db.Facilities
             .Include(f => f.InventoryItems)
             .FirstOrDefaultAsync(f => f.Id == id && f.IsActive);
@@ -69,6 +79,12 @@ public class FacilitiesController : Controller
         ViewBag.Slots = _bookingService.GetDaySlots(facility, day, bookings, blockOuts);
         return View(facility);
     }
+
+    /// <summary>Staff should use Staff/Admin tools, not the public facilities browse pages.</summary>
+    private bool IsStaffWithoutAdmin() =>
+        User.Identity?.IsAuthenticated == true
+        && User.IsInRole(AppRoles.Staff)
+        && !User.IsInRole(AppRoles.Administrator);
 
     private static string? NormalizeMode(string? mode)
     {
