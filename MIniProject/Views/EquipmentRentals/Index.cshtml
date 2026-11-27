@@ -2,6 +2,8 @@
 @{
     ViewData["Title"] = "Equipment rentals";
     var isStaff = User.IsInRole(AppRoles.Staff) || User.IsInRole(AppRoles.Administrator);
+    var isMember = User.IsInRole(AppRoles.Member);
+    var canCreateRental = isMember && ViewBag.CanCreateRental is true;
 }
 
 <section class="section">
@@ -12,13 +14,28 @@
                 <p class="muted mb-0">Rent facility equipment, track returns, and remove invalid records.</p>
             </div>
             <div class="d-flex flex-wrap gap-2">
-                @if (User.IsInRole(AppRoles.Member))
+                @if (isMember)
                 {
                     <a class="btn btn-ghost" asp-controller="Member" asp-action="Dashboard">My Dashboard</a>
-                    <a class="btn btn-primary" asp-action="Create">+ New rental</a>
+                    @if (canCreateRental)
+                    {
+                        <a class="btn btn-primary" asp-action="Create">+ New rental</a>
+                    }
+                    else
+                    {
+                        <a class="btn btn-primary" asp-controller="Facilities" asp-action="Index">Book a facility first</a>
+                    }
                 }
             </div>
         </div>
+        @if (isMember && !canCreateRental)
+        {
+            <div class="alert alert-warning" role="status">
+                You need an eligible facility booking before you can rent equipment.
+                <a asp-controller="Facilities" asp-action="Index" class="alert-link">Book a facility</a>,
+                then return here to create a rental linked to that booking.
+            </div>
+        }
 
         <div class="panel">
             @if (!Model.Any())

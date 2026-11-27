@@ -41,6 +41,9 @@ public class EquipmentRentalFormViewModel
     /// <summary>When true, start/due fields mirror the linked booking and cannot be edited.</summary>
     public bool ScheduleLocked { get; set; }
 
+    /// <summary>When true (member create), a linked booking is required — no orphan rentals.</summary>
+    public bool RequiresLinkedBooking { get; set; }
+
     /// <summary>Count of non-cancelled linkable bookings for this member (excludes the empty chooser option).</summary>
     public int LinkableBookingCount { get; set; }
 
@@ -49,7 +52,7 @@ public class EquipmentRentalFormViewModel
 
     /// <summary>Guidance on what equipment can be rented for the linked booking's facility.</summary>
     public string EquipmentGuidance { get; set; } =
-        "Select a linked booking to see which equipment you can rent for that facility, or leave unlinked to browse all club inventory.";
+        "Select a linked booking to lock the rental window and show equipment for that facility.";
 
     public List<SelectListItem> EquipmentOptions { get; set; } = [];
     public List<SelectListItem> BookingOptions { get; set; } = [];

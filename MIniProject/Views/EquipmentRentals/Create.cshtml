@@ -6,20 +6,21 @@
     var schedulesJson = JsonSerializer.Serialize(Model.LinkedBookingSchedules);
     var locked = Model.ScheduleLocked;
     var hideBookingChooser = Model.LinkableBookingCount == 1;
+    var requireBooking = Model.RequiresLinkedBooking;
 }
 
 <section class="section">
     <div class="container" style="max-width:720px">
         <div class="section-head">
             <h2>Create equipment rental</h2>
-            <p class="muted mb-0">Members only · stock is reserved from facility inventory.</p>
+            <p class="muted mb-0">Members only · must link an eligible facility booking · stock is reserved from facility inventory.</p>
         </div>
         <form asp-action="Create" method="post" class="panel" id="rentalCreateForm">
             @Html.AntiForgeryToken()
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             <div class="row g-3">
                 <div class="col-12">
-                    <label asp-for="BookingId" class="form-label">Linked booking</label>
+                    <label asp-for="BookingId" class="form-label">Linked booking <span class="text-danger">*</span></label>
                     @if (hideBookingChooser)
                     {
                         <input type="hidden" asp-for="BookingId" id="linkedBookingSelect" />
@@ -35,11 +36,16 @@
                     }
                     else
                     {
-                        <select asp-for="BookingId" class="form-select" asp-items="Model.BookingOptions" id="linkedBookingSelect"></select>
+                        <select asp-for="BookingId"
+                                class="form-select"
+                                asp-items="Model.BookingOptions"
+                                id="linkedBookingSelect"
+                                @(requireBooking ? "required" : null)></select>
+                        <span asp-validation-for="BookingId" class="text-danger"></span>
                         <div class="form-text" id="linkedBookingHint">
                             @(locked
                                 ? "Start and due times are locked to this booking’s schedule."
-                                : "Link a booking to lock the rental window and limit equipment to that facility.")
+                                : "A linked booking is required. It locks the rental window and limits equipment to that facility.")
                         </div>
                     }
                 </div>
@@ -74,7 +80,7 @@
                 </div>
             </div>
             <div class="mt-4 d-flex gap-2">
-                <button class="btn btn-primary" type="submit">Create rental</button>
+                <button class="btn btn-primary" type="submit" id="createRentalSubmit">Create rental</button>
                 <a class="btn btn-ghost" asp-action="Index">Back</a>
                 <a class="btn btn-ghost" asp-controller="Member" asp-action="Dashboard">My Dashboard</a>
             </div>
@@ -87,17 +93,19 @@
 (() => {
     const catalog = @Html.Raw(catalogJson);
     const schedules = @Html.Raw(schedulesJson);
+    const requireBooking = @(requireBooking ? "true" : "false");
     const bookingSelect = document.getElementById('linkedBookingSelect');
     const equipmentSelect = document.getElementById('equipmentSelect');
     const guidance = document.getElementById('equipmentGuidance');
     const notesHidden = document.getElementById('notesHidden');
     const hint = document.getElementById('linkedBookingHint');
+    const form = document.getElementById('rentalCreateForm');
     const startDate = document.getElementById('StartDate');
     const startTime = document.getElementById('StartTime');
     const dueDate = document.getElementById('DueDate');
     const dueTime = document.getElementById('DueTime');
     const scheduleFields = [startDate, startTime, dueDate, dueTime].filter(Boolean);
-    const defaultGuidance = 'Select a linked booking to see which equipment you can rent for that facility, or leave unlinked to browse all club inventory.';
+    const defaultGuidance = 'Select a linked booking to lock the rental window and show equipment for that facility.';
 
     function findSchedule(id) {
         if (!id) return null;
@@ -114,7 +122,7 @@
         if (hint) {
             hint.textContent = locked
                 ? 'Start and due times are locked to this booking’s schedule.'
-                : 'Link a booking to lock the rental window and limit equipment to that facility.';
+                : 'A linked booking is required. It locks the rental window and limits equipment to that facility.';
         }
     }
 
@@ -138,7 +146,7 @@
         if (!schedule) return defaultGuidance;
         const names = schedule.EquipmentNames || [];
         if (!names.length) {
-            return `No equipment inventory is listed for ${schedule.FacilityName}. You can still rent from other facilities by unlinking this booking.`;
+            return `No equipment inventory is listed for ${schedule.FacilityName}. Ask staff if other gear is available for this booking.`;
         }
         return `For ${schedule.FacilityName}, you can rent: ${names.join(', ')}. Only inventory tied to this facility is shown below.`;
     }
@@ -200,6 +208,20 @@
     }
     if (bookingSelect && bookingSelect.value) {
         applyLinkedBooking();
+    }
+
+    if (form && requireBooking) {
+        form.addEventListener('submit', (e) => {
+            const value = bookingSelect && bookingSelect.value;
+            if (!value) {
+                e.preventDefault();
+                if (bookingSelect && bookingSelect.tagName === 'SELECT') {
+                    bookingSelect.setCustomValidity('Select a facility booking to link before creating a rental.');
+                    bookingSelect.reportValidity();
+                    bookingSelect.setCustomValidity('');
+                }
+            }
+        });
     }
 })();
 </script>

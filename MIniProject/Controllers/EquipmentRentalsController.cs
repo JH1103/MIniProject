@@ -47,6 +47,11 @@ public class EquipmentRentalsController : Controller
             query = query.Where(r => r.MemberId == user.Id);
         }
 
+        if (User.IsInRole(AppRoles.Member))
+        {
+            ViewBag.CanCreateRental = await HasLinkableBookingAsync(user.Id);
+        }
+
         var rentals = await query.OrderByDescending(r => r.CreatedAt).Take(100).ToListAsync();
         return View(rentals);
     }
@@ -84,7 +89,13 @@ public class EquipmentRentalsController : Controller
             return RedirectToAction("Plans", "Membership");
         }
 
-        return View(await BuildFormAsync(user.Id, new EquipmentRentalFormViewModel()));
+        if (!await HasLinkableBookingAsync(user.Id))
+        {
+            TempData["Error"] = NoEligibleBookingMessage;
+            return RedirectToAction(nameof(Index));
+        }
+
+        return View(await BuildFormAsync(user.Id, new EquipmentRentalFormViewModel(), requireBookingLink: true));
     }
 
     [Authorize(Roles = AppRoles.Member)]
@@ -104,42 +115,37 @@ public class EquipmentRentalsController : Controller
             return RedirectToAction("Plans", "Membership");
         }
 
+        // Members may only create rentals linked to an eligible (non-cancelled, upcoming) booking.
+        var linkableBookings = await LoadLinkableBookingsAsync(user.Id);
+        if (linkableBookings.Count == 0)
+        {
+            TempData["Error"] = NoEligibleBookingMessage;
+            return RedirectToAction(nameof(Index));
+        }
+
         // When the member has exactly one linkable booking, always bind it (chooser is hidden).
-        var linkableBookings = await _db.Bookings
-            .Include(b => b.Facility)!.ThenInclude(f => f!.InventoryItems)
-            .Where(b => b.MemberId == user.Id &&
-                        b.Status != BookingStatus.Cancelled &&
-                        b.StartUtc >= DateTime.UtcNow.Date.AddDays(-1))
-            .OrderBy(b => b.StartUtc)
-            .ToListAsync();
         if (linkableBookings.Count == 1)
         {
             model.BookingId = linkableBookings[0].Id;
         }
 
-        Booking? linkedBooking = null;
-        if (model.BookingId is int bookingId)
+        if (model.BookingId is not int bookingId)
         {
-            linkedBooking = linkableBookings.FirstOrDefault(b => b.Id == bookingId);
-            if (linkedBooking is null)
-            {
-                linkedBooking = await _db.Bookings
-                    .Include(b => b.Facility)!.ThenInclude(f => f!.InventoryItems)
-                    .FirstOrDefaultAsync(b =>
-                        b.Id == bookingId &&
-                        b.MemberId == user.Id &&
-                        b.Status != BookingStatus.Cancelled);
-            }
-
-            if (linkedBooking is null)
-            {
-                ModelState.AddModelError(nameof(model.BookingId), "Linked booking was not found.");
-                return View(await BuildFormAsync(user.Id, model));
-            }
-
-            // Rental window is locked to the linked booking schedule.
-            ApplyBookingSchedule(model, linkedBooking);
+            ModelState.AddModelError(nameof(model.BookingId),
+                "Select a facility booking to link. Equipment rentals cannot be created without a booking.");
+            return View(await BuildFormAsync(user.Id, model, requireBookingLink: true));
         }
+
+        var linkedBooking = linkableBookings.FirstOrDefault(b => b.Id == bookingId);
+        if (linkedBooking is null)
+        {
+            ModelState.AddModelError(nameof(model.BookingId),
+                "Linked booking was not found or is no longer eligible. Choose a current facility booking.");
+            return View(await BuildFormAsync(user.Id, model, requireBookingLink: true));
+        }
+
+        // Rental window is locked to the linked booking schedule.
+        ApplyBookingSchedule(model, linkedBooking);
 
         if (!TryParseWindow(model, out var startUtc, out var dueUtc, out var windowError))
         {
@@ -148,7 +154,7 @@ public class EquipmentRentalsController : Controller
 
         if (!ModelState.IsValid)
         {
-            return View(await BuildFormAsync(user.Id, model));
+            return View(await BuildFormAsync(user.Id, model, requireBookingLink: true));
         }
 
         var item = await _db.InventoryItems
@@ -157,20 +163,20 @@ public class EquipmentRentalsController : Controller
         if (item is null || item.Condition == InventoryCondition.Retired)
         {
             ModelState.AddModelError(nameof(model.InventoryItemId), "Selected equipment is not available.");
-            return View(await BuildFormAsync(user.Id, model));
+            return View(await BuildFormAsync(user.Id, model, requireBookingLink: true));
         }
 
-        if (linkedBooking is not null && item.FacilityId != linkedBooking.FacilityId)
+        if (item.FacilityId != linkedBooking.FacilityId)
         {
             ModelState.AddModelError(nameof(model.InventoryItemId),
                 $"Equipment must belong to {linkedBooking.Facility?.Name ?? "the linked booking's facility"}.");
-            return View(await BuildFormAsync(user.Id, model));
+            return View(await BuildFormAsync(user.Id, model, requireBookingLink: true));
         }
 
         if (model.Quantity > item.Quantity)
         {
             ModelState.AddModelError(nameof(model.Quantity), $"Only {item.Quantity} unit(s) available.");
-            return View(await BuildFormAsync(user.Id, model));
+            return View(await BuildFormAsync(user.Id, model, requireBookingLink: true));
         }
 
         var fee = EquipmentPricing.CalculateFee(model.Quantity, startUtc, dueUtc);
@@ -180,26 +186,21 @@ public class EquipmentRentalsController : Controller
         {
             MemberId = user.Id,
             InventoryItemId = item.Id,
-            BookingId = model.BookingId,
+            BookingId = linkedBooking.Id,
             Quantity = model.Quantity,
             StartUtc = startUtc,
             DueUtc = dueUtc,
             Status = EquipmentRentalStatus.Active,
             Fee = fee,
-            Notes = linkedBooking is not null
-                ? BuildEquipmentGuidance(
-                    linkedBooking.Facility?.Name ?? "facility",
-                    (linkedBooking.Facility?.InventoryItems ?? [])
-                        .Where(i => i.Condition != InventoryCondition.Retired)
-                        .Select(i => i.Name))
-                : model.Notes
+            Notes = BuildEquipmentGuidance(
+                linkedBooking.Facility?.Name ?? "facility",
+                (linkedBooking.Facility?.InventoryItems ?? [])
+                    .Where(i => i.Condition != InventoryCondition.Retired)
+                    .Select(i => i.Name))
         });
 
         // Equipment is always full price; roll into unpaid booking/invoice totals.
-        if (linkedBooking is not null)
-        {
-            await ApplyEquipmentFeeToBookingAsync(linkedBooking.Id, fee);
-        }
+        await ApplyEquipmentFeeToBookingAsync(linkedBooking.Id, fee);
 
         await _db.SaveChangesAsync();
 
@@ -540,7 +541,32 @@ public class EquipmentRentalsController : Controller
         await _db.SaveChangesAsync();
     }
 
-    private async Task<EquipmentRentalFormViewModel> BuildFormAsync(string memberId, EquipmentRentalFormViewModel model)
+    private const string NoEligibleBookingMessage =
+        "You need an eligible facility booking before you can rent equipment. Book a facility first, then create a rental linked to that booking.";
+
+    private async Task<bool> HasLinkableBookingAsync(string memberId) =>
+        await _db.Bookings.AnyAsync(b =>
+            b.MemberId == memberId &&
+            b.Status != BookingStatus.Cancelled &&
+            b.Status != BookingStatus.Completed &&
+            b.Status != BookingStatus.NoShow &&
+            b.StartUtc >= DateTime.UtcNow.Date.AddDays(-1));
+
+    private async Task<List<Booking>> LoadLinkableBookingsAsync(string memberId) =>
+        await _db.Bookings
+            .Include(b => b.Facility)!.ThenInclude(f => f!.InventoryItems)
+            .Where(b => b.MemberId == memberId &&
+                        b.Status != BookingStatus.Cancelled &&
+                        b.Status != BookingStatus.Completed &&
+                        b.Status != BookingStatus.NoShow &&
+                        b.StartUtc >= DateTime.UtcNow.Date.AddDays(-1))
+            .OrderBy(b => b.StartUtc)
+            .ToListAsync();
+
+    private async Task<EquipmentRentalFormViewModel> BuildFormAsync(
+        string memberId,
+        EquipmentRentalFormViewModel model,
+        bool requireBookingLink = false)
     {
         var inventory = await _db.InventoryItems
             .Include(i => i.Facility)
@@ -557,13 +583,7 @@ public class EquipmentRentalsController : Controller
             Quantity = i.Quantity
         }).ToList();
 
-        var bookings = await _db.Bookings
-            .Include(b => b.Facility)!.ThenInclude(f => f!.InventoryItems)
-            .Where(b => b.MemberId == memberId &&
-                        b.Status != BookingStatus.Cancelled &&
-                        b.StartUtc >= DateTime.UtcNow.Date.AddDays(-1))
-            .OrderBy(b => b.StartUtc)
-            .ToListAsync();
+        var bookings = await LoadLinkableBookingsAsync(memberId);
 
         model.LinkedBookingSchedules = bookings.Select(b =>
         {
@@ -587,6 +607,7 @@ public class EquipmentRentalsController : Controller
         }).ToList();
 
         model.LinkableBookingCount = bookings.Count;
+        model.RequiresLinkedBooking = requireBookingLink;
 
         // Sole linkable booking: auto-select and skip the chooser in the view.
         if (bookings.Count == 1)
@@ -607,12 +628,25 @@ public class EquipmentRentalsController : Controller
             Text = $"#{b.Id} · {b.Facility!.Name} · {b.StartUtc.ToLocalTime():dd MMM HH:mm}",
             Selected = b.Id == model.BookingId
         }).ToList();
-        model.BookingOptions.Insert(0, new SelectListItem
+
+        if (!requireBookingLink)
         {
-            Value = "",
-            Text = "(No linked booking)",
-            Selected = model.BookingId is null
-        });
+            model.BookingOptions.Insert(0, new SelectListItem
+            {
+                Value = "",
+                Text = "(No linked booking)",
+                Selected = model.BookingId is null
+            });
+        }
+        else if (model.BookingId is null && bookings.Count > 1)
+        {
+            model.BookingOptions.Insert(0, new SelectListItem
+            {
+                Value = "",
+                Text = "Select a booking…",
+                Selected = true
+            });
+        }
 
         int? facilityFilter = null;
         if (model.BookingId is int selectedBookingId)
@@ -632,8 +666,9 @@ public class EquipmentRentalsController : Controller
 
         if (!model.ScheduleLocked)
         {
-            model.EquipmentGuidance =
-                "Select a linked booking to see which equipment you can rent for that facility, or leave unlinked to browse all club inventory.";
+            model.EquipmentGuidance = requireBookingLink
+                ? "Select a linked booking to lock the rental window and show equipment for that facility."
+                : "Select a linked booking to see which equipment you can rent for that facility, or leave unlinked to browse all club inventory.";
         }
 
         var filtered = facilityFilter is int fid
@@ -710,7 +745,7 @@ public class EquipmentRentalsController : Controller
         var names = equipmentNames.Where(n => !string.IsNullOrWhiteSpace(n)).Distinct().ToList();
         if (names.Count == 0)
         {
-            return $"No equipment inventory is listed for {facilityName}. You can still rent from other facilities by unlinking this booking.";
+            return $"No equipment inventory is listed for {facilityName}. Ask staff if other gear is available for this booking.";
         }
 
         return $"For {facilityName}, you can rent: {string.Join(", ", names)}. Only inventory tied to this facility is shown below.";
