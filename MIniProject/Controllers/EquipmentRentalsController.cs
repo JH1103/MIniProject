@@ -97,7 +97,13 @@ public class EquipmentRentalsController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        return View(await BuildFormAsync(user.Id, new EquipmentRentalFormViewModel(), requireBookingLink: true));
+        return View(await BuildFormAsync(
+            user.Id,
+            new EquipmentRentalFormViewModel
+            {
+                Lines = [new EquipmentRentalLineViewModel()]
+            },
+            requireBookingLink: true));
     }
 
     [Authorize(Roles = AppRoles.Member)]
@@ -117,6 +123,10 @@ public class EquipmentRentalsController : Controller
             return RedirectToAction("Plans", "Membership");
         }
 
+        // Create uses Lines; ignore single-item edit fields that are not posted.
+        ModelState.Remove(nameof(model.InventoryItemId));
+        ModelState.Remove(nameof(model.Quantity));
+
         // Members may only create rentals linked to an eligible future/current booking.
         var linkableBookings = await LoadLinkableBookingsAsync(user.Id);
         if (linkableBookings.Count == 0)
@@ -129,6 +139,18 @@ public class EquipmentRentalsController : Controller
         if (linkableBookings.Count == 1)
         {
             model.BookingId = linkableBookings[0].Id;
+        }
+
+        model.Lines ??= [];
+        // Drop blank template rows the client may leave after remove.
+        model.Lines = model.Lines
+            .Where(l => l.InventoryItemId > 0 || l.Quantity > 0)
+            .ToList();
+
+        if (model.Lines.Count == 0)
+        {
+            ModelState.AddModelError(nameof(model.Lines), "Add at least one equipment line.");
+            model.Lines = [new EquipmentRentalLineViewModel()];
         }
 
         if (model.BookingId is not int bookingId)
@@ -159,54 +181,101 @@ public class EquipmentRentalsController : Controller
             return View(await BuildFormAsync(user.Id, model, requireBookingLink: true));
         }
 
-        var item = await _db.InventoryItems
+        var requestedIds = model.Lines.Select(l => l.InventoryItemId).Where(id => id > 0).Distinct().ToList();
+        var items = await _db.InventoryItems
             .Include(i => i.Facility)
-            .FirstOrDefaultAsync(i => i.Id == model.InventoryItemId);
-        if (item is null || item.Condition == InventoryCondition.Retired)
+            .Where(i => requestedIds.Contains(i.Id))
+            .ToDictionaryAsync(i => i.Id);
+
+        // Track remaining stock so duplicate lines for the same item share one pool.
+        var remainingStock = items.ToDictionary(kv => kv.Key, kv => kv.Value.Quantity);
+
+        for (var i = 0; i < model.Lines.Count; i++)
         {
-            ModelState.AddModelError(nameof(model.InventoryItemId), "Selected equipment is not available.");
+            var line = model.Lines[i];
+            var prefix = $"{nameof(model.Lines)}[{i}]";
+
+            if (line.InventoryItemId <= 0)
+            {
+                ModelState.AddModelError($"{prefix}.{nameof(line.InventoryItemId)}", "Select equipment.");
+                continue;
+            }
+
+            if (line.Quantity < 1 || line.Quantity > 50)
+            {
+                ModelState.AddModelError($"{prefix}.{nameof(line.Quantity)}", "Quantity must be between 1 and 50.");
+                continue;
+            }
+
+            if (!items.TryGetValue(line.InventoryItemId, out var item) ||
+                item.Condition == InventoryCondition.Retired)
+            {
+                ModelState.AddModelError($"{prefix}.{nameof(line.InventoryItemId)}",
+                    "Selected equipment is not available.");
+                continue;
+            }
+
+            if (item.FacilityId != linkedBooking.FacilityId)
+            {
+                ModelState.AddModelError($"{prefix}.{nameof(line.InventoryItemId)}",
+                    $"Equipment must belong to {linkedBooking.Facility?.Name ?? "the linked booking's facility"}.");
+                continue;
+            }
+
+            var available = remainingStock[item.Id];
+            if (line.Quantity > available)
+            {
+                ModelState.AddModelError($"{prefix}.{nameof(line.Quantity)}",
+                    $"Only {available} unit(s) available for {item.Name}.");
+                continue;
+            }
+
+            remainingStock[item.Id] = available - line.Quantity;
+        }
+
+        if (!ModelState.IsValid)
+        {
             return View(await BuildFormAsync(user.Id, model, requireBookingLink: true));
         }
 
-        if (item.FacilityId != linkedBooking.FacilityId)
+        var createdNames = new List<string>();
+        decimal totalFee = 0m;
+        var guidance = BuildEquipmentGuidance(
+            linkedBooking.Facility?.Name ?? "facility",
+            (linkedBooking.Facility?.InventoryItems ?? [])
+                .Where(i => i.Condition != InventoryCondition.Retired)
+                .Select(i => i.Name));
+
+        foreach (var line in model.Lines)
         {
-            ModelState.AddModelError(nameof(model.InventoryItemId),
-                $"Equipment must belong to {linkedBooking.Facility?.Name ?? "the linked booking's facility"}.");
-            return View(await BuildFormAsync(user.Id, model, requireBookingLink: true));
+            var item = items[line.InventoryItemId];
+            var fee = EquipmentPricing.CalculateFee(line.Quantity, startUtc, dueUtc);
+            totalFee += fee;
+            item.Quantity -= line.Quantity;
+
+            _db.EquipmentRentals.Add(new EquipmentRental
+            {
+                MemberId = user.Id,
+                InventoryItemId = item.Id,
+                BookingId = linkedBooking.Id,
+                Quantity = line.Quantity,
+                StartUtc = startUtc,
+                DueUtc = dueUtc,
+                Status = EquipmentRentalStatus.Active,
+                Fee = fee,
+                Notes = guidance
+            });
+            createdNames.Add($"{item.Name} × {line.Quantity}");
         }
-
-        if (model.Quantity > item.Quantity)
-        {
-            ModelState.AddModelError(nameof(model.Quantity), $"Only {item.Quantity} unit(s) available.");
-            return View(await BuildFormAsync(user.Id, model, requireBookingLink: true));
-        }
-
-        var fee = EquipmentPricing.CalculateFee(model.Quantity, startUtc, dueUtc);
-
-        item.Quantity -= model.Quantity;
-        _db.EquipmentRentals.Add(new EquipmentRental
-        {
-            MemberId = user.Id,
-            InventoryItemId = item.Id,
-            BookingId = linkedBooking.Id,
-            Quantity = model.Quantity,
-            StartUtc = startUtc,
-            DueUtc = dueUtc,
-            Status = EquipmentRentalStatus.Active,
-            Fee = fee,
-            Notes = BuildEquipmentGuidance(
-                linkedBooking.Facility?.Name ?? "facility",
-                (linkedBooking.Facility?.InventoryItems ?? [])
-                    .Where(i => i.Condition != InventoryCondition.Retired)
-                    .Select(i => i.Name))
-        });
 
         // Equipment is always full price; roll into unpaid booking/invoice totals.
-        await ApplyEquipmentFeeToBookingAsync(linkedBooking.Id, fee);
+        await ApplyEquipmentFeeToBookingAsync(linkedBooking.Id, totalFee);
 
         await _db.SaveChangesAsync();
 
-        TempData["Success"] = $"Rental created for {item.Name} (MYR {fee:N2}).";
+        TempData["Success"] = createdNames.Count == 1
+            ? $"Rental created for {createdNames[0]} (MYR {totalFee:N2})."
+            : $"Created {createdNames.Count} rentals: {string.Join(", ", createdNames)} (MYR {totalFee:N2}).";
         return RedirectToAction(nameof(Index));
     }
 
@@ -289,6 +358,11 @@ public class EquipmentRentalsController : Controller
             await ForceCancelRentalAsync(rental);
             TempData["Error"] = "This rental is linked to a cancelled booking and is now inactive.";
             return RedirectToAction(nameof(Details), new { id = rental.Id });
+        }
+
+        if (model.InventoryItemId <= 0)
+        {
+            ModelState.AddModelError(nameof(model.InventoryItemId), "Select equipment.");
         }
 
         if (!TryParseWindow(model, out var startUtc, out var dueUtc, out var windowError))
@@ -656,6 +730,11 @@ public class EquipmentRentalsController : Controller
             .Where(i => i.Condition != InventoryCondition.Retired && i.Facility!.IsActive)
             .OrderBy(i => i.Facility!.Name).ThenBy(i => i.Name)
             .ToListAsync();
+
+        if (requireBookingLink && (model.Lines is null || model.Lines.Count == 0))
+        {
+            model.Lines = [new EquipmentRentalLineViewModel()];
+        }
 
         model.EquipmentCatalog = inventory.Select(i => new EquipmentCatalogItem
         {

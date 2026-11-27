@@ -4,16 +4,31 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 
 namespace MIniProject.ViewModels;
 
+public class EquipmentRentalLineViewModel
+{
+    [Required]
+    [Display(Name = "Equipment")]
+    [Range(1, int.MaxValue, ErrorMessage = "Select equipment.")]
+    public int InventoryItemId { get; set; }
+
+    [Range(1, 50)]
+    [Display(Name = "Qty")]
+    public int Quantity { get; set; } = 1;
+}
+
 public class EquipmentRentalFormViewModel
 {
     public int Id { get; set; }
 
-    [Required]
+    /// <summary>Single-item edit form. Create uses <see cref="Lines"/> instead.</summary>
     [Display(Name = "Equipment")]
     public int InventoryItemId { get; set; }
 
     [Range(1, 50)]
     public int Quantity { get; set; } = 1;
+
+    /// <summary>Create form: one rental line per equipment type + quantity.</summary>
+    public List<EquipmentRentalLineViewModel> Lines { get; set; } = [];
 
     [Required, DataType(DataType.Date)]
     [Display(Name = "Start date")]
