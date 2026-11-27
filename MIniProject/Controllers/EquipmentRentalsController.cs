@@ -71,6 +71,7 @@ public class EquipmentRentalsController : Controller
         }
 
         await SyncRentalStatusesAsync([rental]);
+        ViewBag.UnpaidInvoiceId = await FindUnpaidEquipmentInvoiceIdAsync(rental);
         return View(rental);
     }
 
@@ -268,14 +269,25 @@ public class EquipmentRentalsController : Controller
             createdNames.Add($"{item.Name} × {line.Quantity}");
         }
 
-        // Equipment is always full price; roll into unpaid booking/invoice totals.
-        await ApplyEquipmentFeeToBookingAsync(linkedBooking.Id, totalFee);
+        // Equipment is always full price (EquipmentPricing); require invoice/pay like the booking wizard.
+        var payableInvoiceId = await ApplyEquipmentFeeAndEnsurePayableInvoiceAsync(
+            linkedBooking.Id,
+            user.Id,
+            totalFee,
+            createdNames);
 
         await _db.SaveChangesAsync();
 
         TempData["Success"] = createdNames.Count == 1
             ? $"Rental created for {createdNames[0]} (MYR {totalFee:N2})."
             : $"Created {createdNames.Count} rentals: {string.Join(", ", createdNames)} (MYR {totalFee:N2}).";
+
+        if (payableInvoiceId is int invoiceId)
+        {
+            TempData["Success"] += " Complete payment to confirm the equipment charge.";
+            return RedirectToAction("Pay", "Payments", new { id = invoiceId });
+        }
+
         return RedirectToAction(nameof(Index));
     }
 
@@ -469,6 +481,49 @@ public class EquipmentRentalsController : Controller
         return RedirectToAction(nameof(Details), new { id = rental.Id });
     }
 
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Cancel(int id)
+    {
+        var rental = await _db.EquipmentRentals
+            .Include(r => r.InventoryItem)
+            .Include(r => r.Booking)!.ThenInclude(b => b!.Invoice)
+            .FirstOrDefaultAsync(r => r.Id == id);
+        if (rental is null)
+        {
+            return NotFound();
+        }
+
+        if (!await CanAccessAsync(rental))
+        {
+            return Forbid();
+        }
+
+        await SyncRentalStatusesAsync([rental]);
+
+        if (!EquipmentRentalLifecycle.CanCancel(rental.Status))
+        {
+            TempData["Error"] = "Only awaiting-pickup rentals can be cancelled. Once equipment is taken, cancel is unavailable.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var fee = rental.Fee;
+        var bookingId = rental.BookingId;
+        var memberId = rental.MemberId;
+
+        rental.Status = EquipmentRentalStatus.Cancelled;
+        EquipmentRentalLifecycle.RestoreStock(rental);
+
+        if (bookingId is int bid && fee > 0)
+        {
+            await ReverseEquipmentFeeAsync(bid, memberId, fee, rental.Id);
+        }
+
+        await _db.SaveChangesAsync();
+        TempData["Success"] = "Equipment rental cancelled. Stock restored" +
+                              (fee > 0 ? $" and MYR {fee:N2} removed from unpaid charges." : ".");
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
     [Authorize(Roles = AppRoles.Staff + "," + AppRoles.Administrator)]
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> MarkPickedUp(int id)
@@ -628,8 +683,47 @@ public class EquipmentRentalsController : Controller
         await _db.EquipmentRentals
             .Include(r => r.InventoryItem)!.ThenInclude(i => i!.Facility)
             .Include(r => r.Member)
-            .Include(r => r.Booking)
+            .Include(r => r.Booking)!.ThenInclude(b => b!.Invoice)
             .FirstOrDefaultAsync(r => r.Id == id);
+
+    /// <summary>
+    /// Unpaid invoice covering this rental: linked booking invoice, or standalone EQ invoice.
+    /// </summary>
+    private async Task<int?> FindUnpaidEquipmentInvoiceIdAsync(EquipmentRental rental)
+    {
+        if (rental.Status is EquipmentRentalStatus.Cancelled
+            or EquipmentRentalStatus.Inactive
+            or EquipmentRentalStatus.Invalid
+            or EquipmentRentalStatus.Returned)
+        {
+            return null;
+        }
+
+        if (rental.Booking?.Invoice is { } bookingInvoice &&
+            bookingInvoice.Status is InvoiceStatus.Unpaid or InvoiceStatus.Overdue)
+        {
+            return bookingInvoice.Id;
+        }
+
+        if (rental.BookingId is not int bookingId)
+        {
+            return null;
+        }
+
+        var marker = $"booking #{bookingId}";
+        var standalone = await _db.Invoices
+            .AsNoTracking()
+            .Where(i =>
+                i.UserId == rental.MemberId &&
+                i.BookingId == null &&
+                (i.Status == InvoiceStatus.Unpaid || i.Status == InvoiceStatus.Overdue) &&
+                i.Description.Contains(marker))
+            .OrderByDescending(i => i.IssuedAt)
+            .Select(i => (int?)i.Id)
+            .FirstOrDefaultAsync();
+
+        return standalone;
+    }
 
     private async Task<bool> CanAccessAsync(EquipmentRental rental)
     {
@@ -859,8 +953,117 @@ public class EquipmentRentalsController : Controller
     }
 
     /// <summary>
-    /// Adds (or subtracts) equipment fees on an unpaid booking/invoice.
-    /// Member facility discount is never applied to equipment.
+    /// Rolls equipment fees into the linked booking and ensures an unpaid invoice exists
+    /// so create-from-Equipment-rentals cannot skip payment. Uses <see cref="EquipmentPricing"/>
+    /// (full price; member facility discount never applies).
+    /// Returns the invoice id that must be paid now, or null when nothing is payable yet
+    /// (e.g. pending approval with no invoice, or zero fee).
+    /// </summary>
+    private async Task<int?> ApplyEquipmentFeeAndEnsurePayableInvoiceAsync(
+        int bookingId,
+        string memberId,
+        decimal feeDelta,
+        IReadOnlyList<string> equipmentNames)
+    {
+        if (feeDelta == 0)
+        {
+            return null;
+        }
+
+        var booking = await _db.Bookings
+            .Include(b => b.Invoice)
+            .Include(b => b.Facility)
+            .FirstOrDefaultAsync(b => b.Id == bookingId);
+        if (booking is null)
+        {
+            return null;
+        }
+
+        if (booking.Status is BookingStatus.Cancelled or BookingStatus.Completed or BookingStatus.NoShow)
+        {
+            return null;
+        }
+
+        booking.Amount = Math.Max(0, Math.Round(booking.Amount + feeDelta, 2));
+        var equipmentLabel = equipmentNames.Count == 0
+            ? "equipment rental"
+            : string.Join(", ", equipmentNames);
+        var equipmentDesc = $"Equipment rental for booking #{booking.Id}: {equipmentLabel}";
+
+        if (booking.Invoice is not null &&
+            booking.Invoice.Status is InvoiceStatus.Unpaid or InvoiceStatus.Overdue)
+        {
+            booking.Invoice.Amount = booking.Amount;
+            if (!booking.Invoice.Description.Contains("equipment", StringComparison.OrdinalIgnoreCase))
+            {
+                booking.Invoice.Description = string.IsNullOrWhiteSpace(booking.Invoice.Description)
+                    ? equipmentDesc
+                    : $"{booking.Invoice.Description} + equipment rental";
+            }
+
+            return booking.Invoice.Id;
+        }
+
+        // Booking already paid (or refunded state): issue a separate unpaid invoice for the new fee.
+        // Booking↔Invoice is 1:1, so this invoice is not linked via BookingId.
+        if (booking.Invoice is not null)
+        {
+            var eqInvoice = new Invoice
+            {
+                InvoiceNumber = $"EQ-{DateTime.UtcNow:yyyyMMddHHmmss}-{booking.Id:D5}",
+                UserId = memberId,
+                BookingId = null,
+                Amount = Math.Round(feeDelta, 2),
+                Status = InvoiceStatus.Unpaid,
+                Description = equipmentDesc,
+                DueAt = DateTime.UtcNow.AddHours(2),
+                IssuedAt = DateTime.UtcNow
+            };
+            _db.Invoices.Add(eqInvoice);
+            await _db.SaveChangesAsync();
+            return eqInvoice.Id;
+        }
+
+        // No invoice yet (e.g. approval-required still Pending): keep Amount updated;
+        // ApproveBookingAsync will invoice the full booking.Amount including equipment.
+        if (booking.Status == BookingStatus.Pending)
+        {
+            return null;
+        }
+
+        // Awaiting payment / confirmed without invoice — create the booking invoice now.
+        var invoice = new Invoice
+        {
+            InvoiceNumber = $"INV-{DateTime.UtcNow:yyyyMMdd}-{booking.Id:D5}",
+            UserId = memberId,
+            BookingId = booking.Id,
+            Amount = booking.Amount,
+            Status = booking.Amount == 0 ? InvoiceStatus.Paid : InvoiceStatus.Unpaid,
+            Description = string.IsNullOrWhiteSpace(booking.Facility?.Name)
+                ? equipmentDesc
+                : $"Booking for {booking.Facility.Name} + equipment rental",
+            DueAt = booking.PaymentHoldExpiresAt ?? DateTime.UtcNow.AddHours(2),
+            PaidAt = booking.Amount == 0 ? DateTime.UtcNow : null
+        };
+        _db.Invoices.Add(invoice);
+        await _db.SaveChangesAsync();
+
+        if (invoice.Status == InvoiceStatus.Paid)
+        {
+            return null;
+        }
+
+        if (booking.Status == BookingStatus.Confirmed)
+        {
+            booking.Status = BookingStatus.AwaitingPayment;
+        }
+
+        return invoice.Id;
+    }
+
+    /// <summary>
+    /// Used by Edit to adjust booking totals when fee/window/link changes.
+    /// Does not create invoices (edit keeps existing payment state).
     /// </summary>
     private async Task ApplyEquipmentFeeToBookingAsync(int bookingId, decimal feeDelta)
     {
@@ -888,6 +1091,67 @@ public class EquipmentRentalsController : Controller
             booking.Invoice.Status is InvoiceStatus.Unpaid or InvoiceStatus.Overdue)
         {
             booking.Invoice.Amount = booking.Amount;
+        }
+    }
+
+    /// <summary>
+    /// On cancel before pickup: reduce unpaid booking invoice, or cancel/reduce a
+    /// standalone unpaid equipment invoice created after a paid booking.
+    /// </summary>
+    private async Task ReverseEquipmentFeeAsync(int bookingId, string memberId, decimal fee, int rentalId)
+    {
+        fee = Math.Round(fee, 2);
+        if (fee <= 0)
+        {
+            return;
+        }
+
+        var booking = await _db.Bookings
+            .Include(b => b.Invoice)
+            .FirstOrDefaultAsync(b => b.Id == bookingId);
+        if (booking is null)
+        {
+            return;
+        }
+
+        if (booking.Status is not (BookingStatus.Cancelled or BookingStatus.Completed or BookingStatus.NoShow))
+        {
+            booking.Amount = Math.Max(0, Math.Round(booking.Amount - fee, 2));
+        }
+
+        if (booking.Invoice is not null &&
+            booking.Invoice.Status is InvoiceStatus.Unpaid or InvoiceStatus.Overdue)
+        {
+            booking.Invoice.Amount = booking.Amount;
+            if (booking.Invoice.Amount <= 0)
+            {
+                booking.Invoice.Status = InvoiceStatus.Cancelled;
+            }
+
+            return;
+        }
+
+        // Standalone equipment invoices (paid booking path) — match by booking id in description.
+        var marker = $"booking #{bookingId}";
+        var standalone = await _db.Invoices
+            .Where(i =>
+                i.UserId == memberId &&
+                i.BookingId == null &&
+                (i.Status == InvoiceStatus.Unpaid || i.Status == InvoiceStatus.Overdue) &&
+                i.Description.Contains(marker))
+            .OrderByDescending(i => i.IssuedAt)
+            .FirstOrDefaultAsync();
+
+        if (standalone is null)
+        {
+            return;
+        }
+
+        standalone.Amount = Math.Max(0, Math.Round(standalone.Amount - fee, 2));
+        if (standalone.Amount <= 0)
+        {
+            standalone.Status = InvoiceStatus.Cancelled;
+            standalone.Description = $"{standalone.Description} (cancelled rental #{rentalId})";
         }
     }
 

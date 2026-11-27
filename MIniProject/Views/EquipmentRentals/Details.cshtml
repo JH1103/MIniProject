@@ -12,6 +12,8 @@
         or EquipmentRentalStatus.Cancelled
         or EquipmentRentalStatus.Inactive
         || (isStaff && Model.Status == EquipmentRentalStatus.Returned);
+    var canCancel = EquipmentRentalLifecycle.CanCancel(Model.Status);
+    var unpaidInvoiceId = ViewBag.UnpaidInvoiceId as int?;
 }
 
 <section class="section">
@@ -25,7 +27,7 @@
                 <div class="col-md-6"><strong>Member</strong><div>@Model.Member?.FullName</div></div>
                 <div class="col-md-6"><strong>Facility</strong><div>@Model.InventoryItem?.Facility?.Name</div></div>
                 <div class="col-md-6"><strong>Equipment</strong><div>@Model.InventoryItem?.Name × @Model.Quantity</div></div>
-                <div class="col-md-6"><strong>Fee</strong><div>MYR @Model.Fee.ToString("N2")</div></div>
+                <div class="col-md-6"><strong>Fee</strong><div>MYR @Model.Fee.ToString("N2") <span class="small muted">(MYR @EquipmentPricing.FeePerUnitPerDay.ToString("N0")/unit/day)</span></div></div>
                 <div class="col-md-6"><strong>Start</strong><div>@Model.StartUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm")</div></div>
                 <div class="col-md-6"><strong>Due</strong><div>@Model.DueUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm")</div></div>
                 <div class="col-md-6"><strong>Status</strong><div><span class="badge-soft">@statusLabel</span></div></div>
@@ -35,7 +37,27 @@
                 <div class="col-12"><strong>Notes</strong><div>@(Model.Notes ?? "—")</div></div>
             </div>
 
+            @if (unpaidInvoiceId is int payId && Model.Status == EquipmentRentalStatus.Active)
+            {
+                <div class="alert alert-warning mt-3 mb-0" role="status">
+                    Payment is outstanding for this equipment rental.
+                    <a class="alert-link" asp-controller="Payments" asp-action="Pay" asp-route-id="@payId">Pay invoice now</a>
+                </div>
+            }
+
             <div class="mt-4 d-flex flex-wrap gap-2">
+                @if (unpaidInvoiceId is int payInvoiceId && Model.Status == EquipmentRentalStatus.Active)
+                {
+                    <a class="btn btn-primary" asp-controller="Payments" asp-action="Pay" asp-route-id="@payInvoiceId">Pay now</a>
+                }
+                @if (canCancel)
+                {
+                    <form asp-action="Cancel" method="post" onsubmit="return confirm('Cancel this equipment rental? Stock will be restored@(Model.Fee > 0 ? " and unpaid charges adjusted" : "").');">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model.Id" />
+                        <button class="btn btn-ghost" type="submit">Cancel rental</button>
+                    </form>
+                }
                 @if (canEdit)
                 {
                     <a class="btn btn-ghost" asp-action="Edit" asp-route-id="@Model.Id">Update rental</a>

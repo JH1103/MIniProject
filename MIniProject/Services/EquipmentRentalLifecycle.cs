@@ -31,6 +31,12 @@ public static class EquipmentRentalLifecycle
         status == EquipmentRentalStatus.Active;
 
     /// <summary>
+    /// Members and staff may cancel only before pickup (Awaiting pickup / Active).
+    /// </summary>
+    public static bool CanCancel(EquipmentRentalStatus status) =>
+        status == EquipmentRentalStatus.Active;
+
+    /// <summary>
     /// Return requires prior pickup: Rented, or NotReturned (was rented, past due).
     /// Awaiting pickup (Active) / Inactive cannot be marked returned.
     /// </summary>
