@@ -40,7 +40,7 @@
                                 class="form-select"
                                 asp-items="Model.BookingOptions"
                                 id="linkedBookingSelect"
-                                @(requireBooking ? "required" : null)></select>
+                                required="@requireBooking"></select>
                         <span asp-validation-for="BookingId" class="text-danger"></span>
                         <div class="form-text" id="linkedBookingHint">
                             @(locked
