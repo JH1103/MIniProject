@@ -26,6 +26,13 @@ public class EquipmentRental
     /// <summary>When staff confirmed the member took / checked out the equipment.</summary>
     public DateTime? PickedUpAt { get; set; }
 
+    /// <summary>Staff/admin who confirmed pickup (mark taken).</summary>
+    public string? PickedUpByUserId { get; set; }
+
+    /// <summary>Denormalized staff/admin display name at pickup time.</summary>
+    [StringLength(100)]
+    public string? PickedUpByName { get; set; }
+
     public DateTime? ReturnedAt { get; set; }
 
     public EquipmentRentalStatus Status { get; set; } = EquipmentRentalStatus.Active;

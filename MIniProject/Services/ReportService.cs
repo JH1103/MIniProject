@@ -1,16 +1,21 @@
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using MIniProject.Data;
 using MIniProject.Models;
+using MIniProject.ViewModels;
 
 namespace MIniProject.Services;
 
 public class ReportService
 {
     private readonly ApplicationDbContext _db;
+    private readonly UserManager<ApplicationUser> _userManager;
 
-    public ReportService(ApplicationDbContext db)
+    public ReportService(ApplicationDbContext db, UserManager<ApplicationUser> userManager)
     {
         _db = db;
+        _userManager = userManager;
     }
 
     public async Task<DashboardStats> GetDashboardStatsAsync(CancellationToken ct = default)
@@ -90,6 +95,233 @@ public class ReportService
             PeakHours = peakHours,
             MembershipTiers = membershipTiers
         };
+    }
+
+    public async Task<StaffActivityReportViewModel> GetStaffActivityReportAsync(
+        StaffActivityFilterViewModel filter,
+        CancellationToken ct = default)
+    {
+        filter.FromDate ??= DateTime.UtcNow.Date.AddDays(-30);
+        filter.ToDate ??= DateTime.UtcNow.Date;
+
+        var fromUtc = DateTime.SpecifyKind(filter.FromDate.Value.Date, DateTimeKind.Utc);
+        var toUtcExclusive = DateTime.SpecifyKind(filter.ToDate.Value.Date.AddDays(1), DateTimeKind.Utc);
+        var memberQuery = filter.MemberQuery?.Trim();
+        var staffId = string.IsNullOrWhiteSpace(filter.StaffUserId) ? null : filter.StaffUserId.Trim();
+        var action = filter.ActionType;
+
+        var rows = new List<StaffActivityRowViewModel>();
+
+        if (action is StaffActivityActionType.All or StaffActivityActionType.MemberCheckIn)
+        {
+            var memberCheckIns = await _db.MemberCheckIns
+                .AsNoTracking()
+                .Include(c => c.Member)
+                .Include(c => c.Facility)
+                .Include(c => c.Booking)!.ThenInclude(b => b!.Facility)
+                .Where(c => c.CheckedInAt >= fromUtc && c.CheckedInAt < toUtcExclusive)
+                .Where(c => staffId == null || c.CheckedInByUserId == staffId)
+                .OrderByDescending(c => c.CheckedInAt)
+                .Take(1000)
+                .ToListAsync(ct);
+
+            foreach (var c in memberCheckIns)
+            {
+                var memberName = c.Member?.FullName ?? "(unknown member)";
+                if (!MatchesMemberQuery(memberQuery, memberName, c.MemberId))
+                {
+                    continue;
+                }
+
+                var facility = c.Facility?.Name ?? c.Booking?.Facility?.Name ?? "facility";
+                rows.Add(new StaffActivityRowViewModel
+                {
+                    OccurredAtUtc = c.CheckedInAt,
+                    ActionType = "Member check-in",
+                    ActionTypeKey = nameof(StaffActivityActionType.MemberCheckIn),
+                    StaffUserId = c.CheckedInByUserId ?? "",
+                    StaffName = ResolveActorName(c.CheckedInByName, c.CheckedInByUserId),
+                    MemberName = memberName,
+                    MemberId = c.MemberId,
+                    Reference = c.BookingId is int bid ? $"Booking #{bid}" : "—",
+                    Detail = facility
+                });
+            }
+        }
+
+        if (action is StaffActivityActionType.All or StaffActivityActionType.GuestCheckIn)
+        {
+            var guestCheckIns = await _db.CheckInRecords
+                .AsNoTracking()
+                .Include(c => c.VisitorPass)!.ThenInclude(p => p!.Guest)
+                .Include(c => c.VisitorPass)!.ThenInclude(p => p!.Booking)!.ThenInclude(b => b!.Facility)
+                .Where(c => c.CheckedInAt >= fromUtc && c.CheckedInAt < toUtcExclusive)
+                .Where(c => staffId == null || c.CheckedInByUserId == staffId)
+                .OrderByDescending(c => c.CheckedInAt)
+                .Take(1000)
+                .ToListAsync(ct);
+
+            foreach (var c in guestCheckIns)
+            {
+                var guestName = c.VisitorPass?.Guest?.FullName ?? "(unknown guest)";
+                if (!MatchesMemberQuery(memberQuery, guestName, null))
+                {
+                    continue;
+                }
+
+                var bookingId = c.VisitorPass?.BookingId;
+                var facility = c.VisitorPass?.Booking?.Facility?.Name ?? "facility";
+                rows.Add(new StaffActivityRowViewModel
+                {
+                    OccurredAtUtc = c.CheckedInAt,
+                    ActionType = "Guest check-in",
+                    ActionTypeKey = nameof(StaffActivityActionType.GuestCheckIn),
+                    StaffUserId = c.CheckedInByUserId ?? "",
+                    StaffName = ResolveActorName(c.CheckedInByName, c.CheckedInByUserId),
+                    MemberName = guestName,
+                    MemberId = c.VisitorPass?.Guest?.HostMemberId,
+                    Reference = bookingId is int bid ? $"Booking #{bid}" : "—",
+                    Detail = $"Guest · {facility}"
+                });
+            }
+        }
+
+        if (action is StaffActivityActionType.All or StaffActivityActionType.EquipmentPickup)
+        {
+            var pickups = await _db.EquipmentRentals
+                .AsNoTracking()
+                .Include(r => r.Member)
+                .Include(r => r.InventoryItem)
+                .Include(r => r.Booking)
+                .Where(r => r.PickedUpAt != null &&
+                            r.PickedUpAt >= fromUtc &&
+                            r.PickedUpAt < toUtcExclusive)
+                .Where(r => staffId == null || r.PickedUpByUserId == staffId)
+                .OrderByDescending(r => r.PickedUpAt)
+                .Take(1000)
+                .ToListAsync(ct);
+
+            foreach (var r in pickups)
+            {
+                var memberName = r.Member?.FullName ?? "(unknown member)";
+                if (!MatchesMemberQuery(memberQuery, memberName, r.MemberId))
+                {
+                    continue;
+                }
+
+                var equipment = r.InventoryItem?.Name ?? "equipment";
+                rows.Add(new StaffActivityRowViewModel
+                {
+                    OccurredAtUtc = r.PickedUpAt!.Value,
+                    ActionType = "Equipment taken",
+                    ActionTypeKey = nameof(StaffActivityActionType.EquipmentPickup),
+                    StaffUserId = r.PickedUpByUserId ?? "",
+                    StaffName = ResolveActorName(r.PickedUpByName, r.PickedUpByUserId),
+                    MemberName = memberName,
+                    MemberId = r.MemberId,
+                    Reference = r.BookingId is int bid
+                        ? $"Rental #{r.Id} · Booking #{bid}"
+                        : $"Rental #{r.Id}",
+                    Detail = $"{equipment} × {r.Quantity}"
+                });
+            }
+        }
+
+        // Resolve any remaining blank staff names from current user directory.
+        var missingIds = rows
+            .Where(r => string.IsNullOrWhiteSpace(r.StaffName) && !string.IsNullOrWhiteSpace(r.StaffUserId))
+            .Select(r => r.StaffUserId)
+            .Distinct()
+            .ToList();
+        if (missingIds.Count > 0)
+        {
+            var names = await _db.Users
+                .AsNoTracking()
+                .Where(u => missingIds.Contains(u.Id))
+                .Select(u => new { u.Id, u.FullName })
+                .ToDictionaryAsync(u => u.Id, u => u.FullName, ct);
+
+            foreach (var row in rows.Where(r => string.IsNullOrWhiteSpace(r.StaffName)))
+            {
+                if (!string.IsNullOrWhiteSpace(row.StaffUserId) &&
+                    names.TryGetValue(row.StaffUserId, out var name))
+                {
+                    row.StaffName = name;
+                }
+                else if (string.IsNullOrWhiteSpace(row.StaffUserId))
+                {
+                    row.StaffName = "(not recorded)";
+                }
+                else
+                {
+                    row.StaffName = "(unknown staff)";
+                }
+            }
+        }
+        else
+        {
+            foreach (var row in rows.Where(r => string.IsNullOrWhiteSpace(r.StaffName)))
+            {
+                row.StaffName = string.IsNullOrWhiteSpace(row.StaffUserId)
+                    ? "(not recorded)"
+                    : "(unknown staff)";
+            }
+        }
+
+        filter.StaffOptions = await BuildStaffOptionsAsync(staffId, ct);
+
+        var ordered = rows.OrderByDescending(r => r.OccurredAtUtc).ToList();
+        return new StaffActivityReportViewModel
+        {
+            Filter = filter,
+            Rows = ordered,
+            MemberCheckInCount = ordered.Count(r => r.ActionTypeKey == nameof(StaffActivityActionType.MemberCheckIn)),
+            GuestCheckInCount = ordered.Count(r => r.ActionTypeKey == nameof(StaffActivityActionType.GuestCheckIn)),
+            EquipmentPickupCount = ordered.Count(r => r.ActionTypeKey == nameof(StaffActivityActionType.EquipmentPickup))
+        };
+    }
+
+    private async Task<List<SelectListItem>> BuildStaffOptionsAsync(string? selectedStaffId, CancellationToken ct)
+    {
+        var staff = await _userManager.GetUsersInRoleAsync(AppRoles.Staff);
+        var admins = await _userManager.GetUsersInRoleAsync(AppRoles.Administrator);
+        var people = staff.Concat(admins)
+            .GroupBy(u => u.Id)
+            .Select(g => g.First())
+            .OrderBy(u => u.FullName)
+            .ToList();
+
+        var options = new List<SelectListItem>
+        {
+            new("All staff / admin", "") { Selected = string.IsNullOrWhiteSpace(selectedStaffId) }
+        };
+        options.AddRange(people.Select(u => new SelectListItem(u.FullName, u.Id)
+        {
+            Selected = string.Equals(u.Id, selectedStaffId, StringComparison.Ordinal)
+        }));
+        return options;
+    }
+
+    private static bool MatchesMemberQuery(string? query, string displayName, string? memberId)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return true;
+        }
+
+        return displayName.Contains(query, StringComparison.OrdinalIgnoreCase)
+               || (!string.IsNullOrWhiteSpace(memberId) &&
+                   memberId.Contains(query, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string ResolveActorName(string? storedName, string? userId)
+    {
+        if (!string.IsNullOrWhiteSpace(storedName))
+        {
+            return storedName.Trim();
+        }
+
+        return string.Empty;
     }
 }
 

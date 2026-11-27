@@ -62,7 +62,14 @@ public class CheckInRecord
     public ClearanceStatus Status { get; set; } = ClearanceStatus.CheckedIn;
 
     public string? CheckedInByUserId { get; set; }
+
+    [StringLength(100)]
+    public string? CheckedInByName { get; set; }
+
     public string? CheckedOutByUserId { get; set; }
+
+    [StringLength(100)]
+    public string? CheckedOutByName { get; set; }
 }
 
 /// <summary>Front-desk check-in for members using their digital membership QR.</summary>
@@ -86,5 +93,12 @@ public class MemberCheckIn
     public ClearanceStatus Status { get; set; } = ClearanceStatus.CheckedIn;
 
     public string? CheckedInByUserId { get; set; }
+
+    [StringLength(100)]
+    public string? CheckedInByName { get; set; }
+
     public string? CheckedOutByUserId { get; set; }
+
+    [StringLength(100)]
+    public string? CheckedOutByName { get; set; }
 }

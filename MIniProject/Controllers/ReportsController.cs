@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using MIniProject.Data;
 using MIniProject.Models;
 using MIniProject.Services;
+using MIniProject.ViewModels;
 
 namespace MIniProject.Controllers;
 
@@ -38,6 +39,44 @@ public class ReportsController : Controller
             .ToListAsync();
         return View(stats);
     }
+
+    /// <summary>
+    /// Top-management report: which staff/admin helped members check in
+    /// and which staff/admin marked equipment taken / picked up.
+    /// </summary>
+    [HttpGet]
+    public async Task<IActionResult> StaffActivity(StaffActivityFilterViewModel filter)
+    {
+        var report = await _reportService.GetStaffActivityReportAsync(filter);
+        return View(report);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> ExportStaffActivity(StaffActivityFilterViewModel filter)
+    {
+        var report = await _reportService.GetStaffActivityReportAsync(filter);
+        var sb = new StringBuilder();
+        sb.AppendLine("DateUtc,ActionType,StaffUserId,StaffName,Member,Reference,Detail");
+        foreach (var row in report.Rows)
+        {
+            sb.AppendLine(
+                $"{row.OccurredAtUtc:u}," +
+                $"\"{EscapeCsv(row.ActionType)}\"," +
+                $"\"{EscapeCsv(row.StaffUserId)}\"," +
+                $"\"{EscapeCsv(row.StaffName)}\"," +
+                $"\"{EscapeCsv(row.MemberName)}\"," +
+                $"\"{EscapeCsv(row.Reference)}\"," +
+                $"\"{EscapeCsv(row.Detail)}\"");
+        }
+
+        return File(
+            Encoding.UTF8.GetBytes(sb.ToString()),
+            "text/csv",
+            $"staff-activity-{DateTime.UtcNow:yyyyMMdd}.csv");
+    }
+
+    private static string EscapeCsv(string? value) =>
+        (value ?? string.Empty).Replace("\"", "\"\"");
 
     public async Task<IActionResult> ExportBookings()
     {

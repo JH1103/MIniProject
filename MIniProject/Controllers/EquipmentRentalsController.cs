@@ -480,7 +480,10 @@ public class EquipmentRentalsController : Controller
 
             if (model.Status == EquipmentRentalStatus.Rented && rental.PickedUpAt is null)
             {
+                var actor = await _userManager.GetUserAsync(User);
                 rental.PickedUpAt = DateTime.UtcNow;
+                rental.PickedUpByUserId = actor?.Id;
+                rental.PickedUpByName = actor?.FullName;
             }
 
             if (model.Status == EquipmentRentalStatus.Returned && rental.ReturnedAt is null)
@@ -573,7 +576,13 @@ public class EquipmentRentalsController : Controller
             return RedirectToAction(nameof(Details), new { id });
         }
 
-        EquipmentRentalLifecycle.MarkPickedUp(rental, DateTime.UtcNow);
+        var actor = await _userManager.GetUserAsync(User);
+        if (actor is null)
+        {
+            return Challenge();
+        }
+
+        EquipmentRentalLifecycle.MarkPickedUp(rental, DateTime.UtcNow, actor.Id, actor.FullName);
         await _db.SaveChangesAsync();
         TempData["Success"] = "Equipment marked as taken by the member (Rented).";
         return RedirectToAction(nameof(Details), new { id });

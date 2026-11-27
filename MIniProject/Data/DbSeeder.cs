@@ -22,6 +22,7 @@ public static class DbSeeder
         await EnsureClearanceSchemaAsync(db);
         await EnsureEquipmentRentalTableAsync(db);
         await EnsureEquipmentRentalPickupSchemaAsync(db);
+        await EnsureStaffActorAuditSchemaAsync(db);
         await EnsureEquipmentCatalogTableAsync(db);
 
         foreach (var role in AppRoles.All)
@@ -632,7 +633,9 @@ public static class DbSeeder
                     [CheckedOutAt] datetime2 NULL,
                     [Status] int NOT NULL CONSTRAINT DF_MemberCheckIns_Status DEFAULT(0),
                     [CheckedInByUserId] nvarchar(max) NULL,
+                    [CheckedInByName] nvarchar(100) NULL,
                     [CheckedOutByUserId] nvarchar(max) NULL,
+                    [CheckedOutByName] nvarchar(100) NULL,
                     CONSTRAINT [PK_MemberCheckIns] PRIMARY KEY ([Id]),
                     CONSTRAINT [FK_MemberCheckIns_AspNetUsers_MemberId]
                         FOREIGN KEY ([MemberId]) REFERENCES [AspNetUsers] ([Id]) ON DELETE CASCADE
@@ -698,6 +701,8 @@ public static class DbSeeder
                     [StartUtc] datetime2 NOT NULL,
                     [DueUtc] datetime2 NOT NULL,
                     [PickedUpAt] datetime2 NULL,
+                    [PickedUpByUserId] nvarchar(450) NULL,
+                    [PickedUpByName] nvarchar(100) NULL,
                     [ReturnedAt] datetime2 NULL,
                     [Status] int NOT NULL,
                     [Fee] decimal(18,2) NOT NULL,
@@ -729,6 +734,94 @@ public static class DbSeeder
             """
             IF COL_LENGTH('EquipmentRentals', 'PickedUpAt') IS NULL
                 ALTER TABLE [EquipmentRentals] ADD [PickedUpAt] datetime2 NULL;
+            """);
+    }
+
+    /// <summary>
+    /// Persists staff/admin actor id + name on check-in and equipment pickup for management reports.
+    /// </summary>
+    private static async Task EnsureStaffActorAuditSchemaAsync(ApplicationDbContext db)
+    {
+        if (!db.Database.IsSqlServer())
+        {
+            return;
+        }
+
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            IF COL_LENGTH('EquipmentRentals', 'PickedUpByUserId') IS NULL
+                ALTER TABLE [EquipmentRentals] ADD [PickedUpByUserId] nvarchar(450) NULL;
+            """);
+
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            IF COL_LENGTH('EquipmentRentals', 'PickedUpByName') IS NULL
+                ALTER TABLE [EquipmentRentals] ADD [PickedUpByName] nvarchar(100) NULL;
+            """);
+
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            IF COL_LENGTH('MemberCheckIns', 'CheckedInByName') IS NULL
+                ALTER TABLE [MemberCheckIns] ADD [CheckedInByName] nvarchar(100) NULL;
+            """);
+
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            IF COL_LENGTH('MemberCheckIns', 'CheckedOutByName') IS NULL
+                ALTER TABLE [MemberCheckIns] ADD [CheckedOutByName] nvarchar(100) NULL;
+            """);
+
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            IF COL_LENGTH('CheckInRecords', 'CheckedInByName') IS NULL
+                ALTER TABLE [CheckInRecords] ADD [CheckedInByName] nvarchar(100) NULL;
+            """);
+
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            IF COL_LENGTH('CheckInRecords', 'CheckedOutByName') IS NULL
+                ALTER TABLE [CheckInRecords] ADD [CheckedOutByName] nvarchar(100) NULL;
+            """);
+
+        // Backfill display names from AspNetUsers where actor id exists but name was never stored.
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            UPDATE c
+            SET c.[CheckedInByName] = u.[FullName]
+            FROM [MemberCheckIns] c
+            INNER JOIN [AspNetUsers] u ON u.[Id] = c.[CheckedInByUserId]
+            WHERE c.[CheckedInByUserId] IS NOT NULL
+              AND (c.[CheckedInByName] IS NULL OR LTRIM(RTRIM(c.[CheckedInByName])) = N'');
+            """);
+
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            UPDATE c
+            SET c.[CheckedOutByName] = u.[FullName]
+            FROM [MemberCheckIns] c
+            INNER JOIN [AspNetUsers] u ON u.[Id] = c.[CheckedOutByUserId]
+            WHERE c.[CheckedOutByUserId] IS NOT NULL
+              AND (c.[CheckedOutByName] IS NULL OR LTRIM(RTRIM(c.[CheckedOutByName])) = N'');
+            """);
+
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            UPDATE c
+            SET c.[CheckedInByName] = u.[FullName]
+            FROM [CheckInRecords] c
+            INNER JOIN [AspNetUsers] u ON u.[Id] = c.[CheckedInByUserId]
+            WHERE c.[CheckedInByUserId] IS NOT NULL
+              AND (c.[CheckedInByName] IS NULL OR LTRIM(RTRIM(c.[CheckedInByName])) = N'');
+            """);
+
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            UPDATE c
+            SET c.[CheckedOutByName] = u.[FullName]
+            FROM [CheckInRecords] c
+            INNER JOIN [AspNetUsers] u ON u.[Id] = c.[CheckedOutByUserId]
+            WHERE c.[CheckedOutByUserId] IS NOT NULL
+              AND (c.[CheckedOutByName] IS NULL OR LTRIM(RTRIM(c.[CheckedOutByName])) = N'');
             """);
     }
 

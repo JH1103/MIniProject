@@ -70,7 +70,11 @@ public static class EquipmentRentalLifecycle
         return changed;
     }
 
-    public static void MarkPickedUp(EquipmentRental rental, DateTime utcNow)
+    public static void MarkPickedUp(
+        EquipmentRental rental,
+        DateTime utcNow,
+        string? staffUserId = null,
+        string? staffName = null)
     {
         if (!CanMarkPickedUp(rental.Status))
         {
@@ -79,6 +83,8 @@ public static class EquipmentRentalLifecycle
 
         rental.Status = EquipmentRentalStatus.Rented;
         rental.PickedUpAt = utcNow;
+        rental.PickedUpByUserId = staffUserId;
+        rental.PickedUpByName = staffName;
     }
 
     public static void MarkReturned(EquipmentRental rental, DateTime utcNow)

@@ -32,7 +32,14 @@
                 <div class="col-md-6"><strong>Start</strong><div>@Model.StartUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm")</div></div>
                 <div class="col-md-6"><strong>Due</strong><div>@Model.DueUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm")</div></div>
                 <div class="col-md-6"><strong>Status</strong><div><span class="badge-soft">@statusLabel</span></div></div>
-                <div class="col-md-6"><strong>Picked up</strong><div>@(Model.PickedUpAt?.ToLocalTime().ToString("dd MMM yyyy HH:mm") ?? "—")</div></div>
+                <div class="col-md-6">
+                    <strong>Picked up</strong>
+                    <div>@(Model.PickedUpAt?.ToLocalTime().ToString("dd MMM yyyy HH:mm") ?? "—")</div>
+                    @if (!string.IsNullOrWhiteSpace(Model.PickedUpByName) || !string.IsNullOrWhiteSpace(Model.PickedUpByUserId))
+                    {
+                        <div class="small muted">by @(Model.PickedUpByName ?? Model.PickedUpByUserId)</div>
+                    }
+                </div>
                 <div class="col-md-6"><strong>Returned</strong><div>@(Model.ReturnedAt?.ToLocalTime().ToString("dd MMM yyyy HH:mm") ?? "—")</div></div>
                 <div class="col-md-6"><strong>Booking</strong><div>@(Model.BookingId is null ? "—" : $"#{Model.BookingId}")</div></div>
                 <div class="col-12"><strong>Notes</strong><div>@(Model.Notes ?? "—")</div></div>
