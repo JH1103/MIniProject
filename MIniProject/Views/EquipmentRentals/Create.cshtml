@@ -125,8 +125,12 @@
                     <input type="hidden" asp-for="Notes" id="notesHidden" />
                 </div>
             </div>
+            <p class="form-text mb-3">
+                Fee is MYR @EquipmentPricing.FeePerUnitPerDay.ToString("N0") per unit per day (full price; membership discount does not apply).
+                After you create the rental you will be taken to pay any outstanding invoice.
+            </p>
             <div class="mt-4 d-flex gap-2">
-                <button class="btn btn-primary" type="submit" id="createRentalSubmit">Create rental</button>
+                <button class="btn btn-primary" type="submit" id="createRentalSubmit">Create &amp; pay</button>
                 <a class="btn btn-ghost" asp-action="Index">Back</a>
                 <a class="btn btn-ghost" asp-controller="Member" asp-action="Dashboard">My Dashboard</a>
             </div>
