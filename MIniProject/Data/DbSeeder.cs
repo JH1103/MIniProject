@@ -52,6 +52,8 @@ public static class DbSeeder
 
         await SeedMembershipPlansAsync(db);
         await SeedKotaPermaiFacilitiesAsync(db);
+        await SeedEquipmentCatalogAsync(db);
+        await EnsureFacilityInventoryAsync(db);
         await BackfillEquipmentCatalogAsync(db);
 
         if (!db.Announcements.Any())
@@ -266,8 +268,13 @@ public static class DbSeeder
             [
                 new InventoryItem { Name = "Round Tables", Quantity = 40, Condition = InventoryCondition.Good },
                 new InventoryItem { Name = "Banquet Chairs", Quantity = 350, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "Cocktail Tables", Quantity = 20, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "Table Cloths", Quantity = 40, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "Chair Covers", Quantity = 350, Condition = InventoryCondition.Good },
                 new InventoryItem { Name = "LCD Projector & Screen", Quantity = 2, Condition = InventoryCondition.Good },
-                new InventoryItem { Name = "PA System & Wireless Mics", Quantity = 1, Condition = InventoryCondition.Good }
+                new InventoryItem { Name = "PA System & Wireless Mics", Quantity = 1, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "Lectern / Podium", Quantity = 2, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "Stage Risers", Quantity = 6, Condition = InventoryCondition.Good }
             ]
         },
         new Facility
@@ -285,8 +292,14 @@ public static class DbSeeder
             InventoryItems =
             [
                 new InventoryItem { Name = "Conference Tables", Quantity = 12, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "Banquet Chairs", Quantity = 100, Condition = InventoryCondition.Good },
                 new InventoryItem { Name = "Whiteboard", Quantity = 2, Condition = InventoryCondition.Good },
-                new InventoryItem { Name = "Projector", Quantity = 1, Condition = InventoryCondition.Good }
+                new InventoryItem { Name = "Flip Chart Stand", Quantity = 2, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "Projector", Quantity = 1, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "LCD Projector & Screen", Quantity = 1, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "PA System & Wireless Mics", Quantity = 1, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "HDMI Cable Kit", Quantity = 2, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "Extension Cord / Power Strip", Quantity = 4, Condition = InventoryCondition.Good }
             ]
         },
         new Facility
@@ -300,7 +313,13 @@ public static class DbSeeder
             OpenTime = new TimeSpan(8, 0, 0),
             CloseTime = new TimeSpan(22, 0, 0),
             SlotDurationMinutes = 60,
-            BookingMode = BookingMode.InstantConfirmation
+            BookingMode = BookingMode.InstantConfirmation,
+            InventoryItems =
+            [
+                new InventoryItem { Name = "Conference Tables", Quantity = 1, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "Whiteboard", Quantity = 1, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "HDMI Cable Kit", Quantity = 1, Condition = InventoryCondition.Good }
+            ]
         },
         new Facility
         {
@@ -317,7 +336,8 @@ public static class DbSeeder
             InventoryItems =
             [
                 new InventoryItem { Name = "Badminton Rackets", Quantity = 16, Condition = InventoryCondition.Good },
-                new InventoryItem { Name = "Shuttlecocks (tube)", Quantity = 30, Condition = InventoryCondition.Good }
+                new InventoryItem { Name = "Shuttlecocks (tube)", Quantity = 30, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "Non-marking Court Shoes", Quantity = 10, Condition = InventoryCondition.Good }
             ]
         },
         new Facility
@@ -334,7 +354,8 @@ public static class DbSeeder
             BookingMode = BookingMode.InstantConfirmation,
             InventoryItems =
             [
-                new InventoryItem { Name = "Tennis Rackets", Quantity = 8, Condition = InventoryCondition.Good }
+                new InventoryItem { Name = "Tennis Rackets", Quantity = 8, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "Tennis Balls (can)", Quantity = 20, Condition = InventoryCondition.Good }
             ]
         },
         new Facility
@@ -348,7 +369,13 @@ public static class DbSeeder
             OpenTime = new TimeSpan(7, 0, 0),
             CloseTime = new TimeSpan(22, 0, 0),
             SlotDurationMinutes = 45,
-            BookingMode = BookingMode.InstantConfirmation
+            BookingMode = BookingMode.InstantConfirmation,
+            InventoryItems =
+            [
+                new InventoryItem { Name = "Squash Rackets", Quantity = 8, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "Squash Balls", Quantity = 24, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "Protective Eyewear", Quantity = 6, Condition = InventoryCondition.Good }
+            ]
         },
         new Facility
         {
@@ -361,7 +388,12 @@ public static class DbSeeder
             OpenTime = new TimeSpan(7, 0, 0),
             CloseTime = new TimeSpan(21, 0, 0),
             SlotDurationMinutes = 60,
-            BookingMode = BookingMode.InstantConfirmation
+            BookingMode = BookingMode.InstantConfirmation,
+            InventoryItems =
+            [
+                new InventoryItem { Name = "Pickleball Paddles", Quantity = 12, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "Pickleball Balls", Quantity = 30, Condition = InventoryCondition.Good }
+            ]
         },
         new Facility
         {
@@ -374,7 +406,12 @@ public static class DbSeeder
             OpenTime = new TimeSpan(8, 0, 0),
             CloseTime = new TimeSpan(21, 0, 0),
             SlotDurationMinutes = 60,
-            BookingMode = BookingMode.InstantConfirmation
+            BookingMode = BookingMode.InstantConfirmation,
+            InventoryItems =
+            [
+                new InventoryItem { Name = "Table Tennis Bats", Quantity = 12, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "Table Tennis Balls", Quantity = 40, Condition = InventoryCondition.Good }
+            ]
         },
         new Facility
         {
@@ -387,7 +424,14 @@ public static class DbSeeder
             OpenTime = new TimeSpan(6, 30, 0),
             CloseTime = new TimeSpan(21, 0, 0),
             SlotDurationMinutes = 60,
-            BookingMode = BookingMode.InstantConfirmation
+            BookingMode = BookingMode.InstantConfirmation,
+            InventoryItems =
+            [
+                new InventoryItem { Name = "Kickboards", Quantity = 20, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "Pool Noodles", Quantity = 15, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "Swim Fins", Quantity = 12, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "Pull Buoys", Quantity = 16, Condition = InventoryCondition.Good }
+            ]
         },
         new Facility
         {
@@ -400,7 +444,15 @@ public static class DbSeeder
             OpenTime = new TimeSpan(6, 0, 0),
             CloseTime = new TimeSpan(22, 0, 0),
             SlotDurationMinutes = 60,
-            BookingMode = BookingMode.InstantConfirmation
+            BookingMode = BookingMode.InstantConfirmation,
+            InventoryItems =
+            [
+                new InventoryItem { Name = "Yoga Mats", Quantity = 20, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "Dumbbells (pair)", Quantity = 15, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "Resistance Bands", Quantity = 20, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "Foam Rollers", Quantity = 10, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "Jump Ropes", Quantity = 12, Condition = InventoryCondition.Good }
+            ]
         },
         new Facility
         {
@@ -416,7 +468,10 @@ public static class DbSeeder
             BookingMode = BookingMode.InstantConfirmation,
             InventoryItems =
             [
-                new InventoryItem { Name = "Range Ball Baskets", Quantity = 60, Condition = InventoryCondition.Good }
+                new InventoryItem { Name = "Range Ball Baskets", Quantity = 60, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "Golf Clubs (set)", Quantity = 8, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "Golf Push Trolley", Quantity = 6, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "Golf Umbrella", Quantity = 10, Condition = InventoryCondition.Good }
             ]
         },
         new Facility
@@ -430,7 +485,14 @@ public static class DbSeeder
             OpenTime = new TimeSpan(8, 0, 0),
             CloseTime = new TimeSpan(21, 0, 0),
             SlotDurationMinutes = 60,
-            BookingMode = BookingMode.InstantConfirmation
+            BookingMode = BookingMode.InstantConfirmation,
+            InventoryItems =
+            [
+                new InventoryItem { Name = "Yoga Mats", Quantity = 25, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "Bluetooth Speaker", Quantity = 2, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "Resistance Bands", Quantity = 15, Condition = InventoryCondition.Good },
+                new InventoryItem { Name = "Foam Rollers", Quantity = 8, Condition = InventoryCondition.Good }
+            ]
         }
     ];
 
@@ -696,6 +758,143 @@ public static class DbSeeder
                     ON [EquipmentCatalogEntries] ([Name]);
             END
             """);
+    }
+
+    /// <summary>
+    /// Seeds the club-wide equipment catalog with typical Kota Permai facility
+    /// rentables (sports, golf, pool, gym, banquet, meeting). Idempotent by name.
+    /// </summary>
+    private static async Task SeedEquipmentCatalogAsync(ApplicationDbContext db)
+    {
+        var desired = CreateEquipmentCatalogEntries();
+        var existing = await db.EquipmentCatalogEntries.ToListAsync();
+        var byName = existing.ToDictionary(e => e.Name, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var entry in desired)
+        {
+            if (byName.TryGetValue(entry.Name, out var match))
+            {
+                if (string.IsNullOrWhiteSpace(match.Description) && !string.IsNullOrWhiteSpace(entry.Description))
+                {
+                    match.Description = entry.Description;
+                }
+
+                if (!match.IsActive)
+                {
+                    match.IsActive = true;
+                }
+
+                continue;
+            }
+
+            db.EquipmentCatalogEntries.Add(entry);
+            byName[entry.Name] = entry;
+        }
+
+        if (db.ChangeTracker.HasChanges())
+        {
+            await db.SaveChangesAsync();
+        }
+    }
+
+    private static List<EquipmentCatalogEntry> CreateEquipmentCatalogEntries() =>
+    [
+        // Badminton
+        new() { Name = "Badminton Rackets", Description = "Adult badminton racket rental from the sports counter." },
+        new() { Name = "Shuttlecocks (tube)", Description = "Tube of feather or nylon shuttlecocks for court play." },
+        new() { Name = "Non-marking Court Shoes", Description = "Indoor non-marking shoes for badminton and squash courts." },
+        // Tennis
+        new() { Name = "Tennis Rackets", Description = "Adult tennis racket rental for outdoor court bookings." },
+        new() { Name = "Tennis Balls (can)", Description = "Can of pressure tennis balls for match or practice play." },
+        // Squash
+        new() { Name = "Squash Rackets", Description = "Squash racket rental for indoor court sessions." },
+        new() { Name = "Squash Balls", Description = "Single or double yellow-dot squash balls." },
+        new() { Name = "Protective Eyewear", Description = "Court-approved protective eyewear for squash." },
+        // Pickleball
+        new() { Name = "Pickleball Paddles", Description = "Composite pickleball paddles for outdoor court play." },
+        new() { Name = "Pickleball Balls", Description = "Outdoor pickleball balls for member court bookings." },
+        // Table tennis
+        new() { Name = "Table Tennis Bats", Description = "Table tennis bats for casual and practice sessions." },
+        new() { Name = "Table Tennis Balls", Description = "40mm table tennis balls (pack)." },
+        // Pool / swimming
+        new() { Name = "Kickboards", Description = "Foam kickboards for lap-pool training." },
+        new() { Name = "Pool Noodles", Description = "Foam pool noodles for aqua fitness and learn-to-swim." },
+        new() { Name = "Swim Fins", Description = "Short training swim fins (pair)." },
+        new() { Name = "Pull Buoys", Description = "Pull buoys for stroke technique training." },
+        // Gym / multi-purpose
+        new() { Name = "Yoga Mats", Description = "Non-slip yoga / exercise mats for gym and activity classes." },
+        new() { Name = "Dumbbells (pair)", Description = "Free-weight dumbbell pair for gym floor use." },
+        new() { Name = "Resistance Bands", Description = "Loop or tube resistance bands for strength and rehab." },
+        new() { Name = "Foam Rollers", Description = "Foam rollers for warm-up and recovery." },
+        new() { Name = "Jump Ropes", Description = "Speed jump ropes for cardio warm-ups." },
+        new() { Name = "Bluetooth Speaker", Description = "Portable Bluetooth speaker for multi-purpose room classes." },
+        // Golf / driving range
+        new() { Name = "Range Ball Baskets", Description = "Basket of range balls for driving-range bay hire." },
+        new() { Name = "Golf Clubs (set)", Description = "Half or full rental set of golf clubs." },
+        new() { Name = "Golf Push Trolley", Description = "Manual push trolley for practice or course use." },
+        new() { Name = "Golf Umbrella", Description = "Large golf umbrella for wet-weather practice." },
+        // Banquet / ballroom
+        new() { Name = "Round Tables", Description = "Banquet round tables for ballroom and reception layouts." },
+        new() { Name = "Banquet Chairs", Description = "Stackable banquet chairs for functions and meetings." },
+        new() { Name = "Cocktail Tables", Description = "High cocktail / cabaret tables for receptions." },
+        new() { Name = "Table Cloths", Description = "Fitted or drape table cloths for banquet tables." },
+        new() { Name = "Chair Covers", Description = "Banquet chair covers for formal events." },
+        new() { Name = "LCD Projector & Screen", Description = "LCD projector with portable projection screen." },
+        new() { Name = "PA System & Wireless Mics", Description = "Portable PA system with wireless handheld microphones." },
+        new() { Name = "Lectern / Podium", Description = "Freestanding lectern or podium for speeches." },
+        new() { Name = "Stage Risers", Description = "Modular stage riser platforms for ballroom stages." },
+        // Meeting / function
+        new() { Name = "Conference Tables", Description = "Modular conference tables for meeting layouts." },
+        new() { Name = "Whiteboard", Description = "Mobile whiteboard with markers for workshops." },
+        new() { Name = "Flip Chart Stand", Description = "Flip-chart easel with paper pad." },
+        new() { Name = "Projector", Description = "Meeting-room projector for presentations." },
+        new() { Name = "HDMI Cable Kit", Description = "HDMI / adapter cable kit for laptop presentations." },
+        new() { Name = "Extension Cord / Power Strip", Description = "Power strip and extension lead for AV setups." }
+    ];
+
+    /// <summary>
+    /// Ensures each seeded facility has its expected rentable inventory rows
+    /// (adds missing names only; does not overwrite existing quantities).
+    /// </summary>
+    private static async Task EnsureFacilityInventoryAsync(ApplicationDbContext db)
+    {
+        var desiredByFacility = CreateKotaPermaiFacilities()
+            .ToDictionary(f => f.Name, f => f.InventoryItems.ToList(), StringComparer.OrdinalIgnoreCase);
+
+        var facilities = await db.Facilities.Include(f => f.InventoryItems).ToListAsync();
+        foreach (var facility in facilities)
+        {
+            if (!desiredByFacility.TryGetValue(facility.Name, out var desiredItems) || desiredItems.Count == 0)
+            {
+                continue;
+            }
+
+            var existingNames = new HashSet<string>(
+                facility.InventoryItems.Select(i => i.Name),
+                StringComparer.OrdinalIgnoreCase);
+
+            foreach (var item in desiredItems)
+            {
+                if (existingNames.Contains(item.Name))
+                {
+                    continue;
+                }
+
+                db.InventoryItems.Add(new InventoryItem
+                {
+                    FacilityId = facility.Id,
+                    Name = item.Name,
+                    Quantity = item.Quantity,
+                    Condition = item.Condition
+                });
+                existingNames.Add(item.Name);
+            }
+        }
+
+        if (db.ChangeTracker.HasChanges())
+        {
+            await db.SaveChangesAsync();
+        }
     }
 
     /// <summary>
