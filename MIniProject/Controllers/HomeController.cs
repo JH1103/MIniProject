@@ -20,9 +20,8 @@ public class HomeController : Controller
 
     public async Task<IActionResult> Index()
     {
-        // Admin / Staff see an operational stats dashboard instead of the marketing hero.
-        if (User.Identity?.IsAuthenticated == true &&
-            (User.IsInRole(AppRoles.Administrator) || User.IsInRole(AppRoles.Staff)))
+        // Only Administrators see the operational stats dashboard; Staff keep the public hero.
+        if (User.Identity?.IsAuthenticated == true && User.IsInRole(AppRoles.Administrator))
         {
             var dashboard = await _reportService.GetAdminHomeDashboardAsync();
             return View("AdminDashboard", dashboard);
