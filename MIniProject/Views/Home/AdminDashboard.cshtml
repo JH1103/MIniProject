@@ -1,0 +1,294 @@
+@model AdminHomeDashboardViewModel
+@using System.Text.Encodings.Web
+@using System.Text.Json
+@{
+    ViewData["Title"] = "Operations dashboard";
+    var jsonOptions = new JsonSerializerOptions
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Encoder = JavaScriptEncoder.Default
+    };
+    var bookingsByDayJson = JsonSerializer.Serialize(Model.BookingsByDay, jsonOptions);
+    var bookingsByStatusJson = JsonSerializer.Serialize(Model.BookingsByStatus, jsonOptions);
+    var rentalsByEquipmentJson = JsonSerializer.Serialize(Model.RentalsByEquipment, jsonOptions);
+    var facilityUsageJson = JsonSerializer.Serialize(Model.FacilityUsage, jsonOptions);
+    var topMembersJson = JsonSerializer.Serialize(
+        Model.TopMembers.Select(m => new
+        {
+            label = m.MemberName,
+            bookingCount = m.BookingCount,
+            checkInCount = m.CheckInCount,
+            total = m.TotalActivity
+        }),
+        jsonOptions);
+    var windowLabel = $"{Model.WindowStartUtc:dd MMM yyyy} – {Model.WindowEndUtc:dd MMM yyyy} UTC · last {Model.WindowDays} days";
+}
+
+<section class="section admin-home-dashboard">
+    <div class="container">
+        <div class="admin-hero mb-4">
+            <div class="admin-hero__copy">
+                <div class="admin-hero__eyebrow">Home · Operations overview</div>
+                <span class="badge-soft">Admin &amp; staff</span>
+                <h1>Clubhouse statistics</h1>
+                <p class="mb-0">Bookings, equipment rentals, facility demand and top members — @windowLabel.</p>
+            </div>
+            <div class="admin-hero__stats">
+                <div>
+                    <span>Bookings</span>
+                    <strong>@Model.BookingsInWindow</strong>
+                </div>
+                <div>
+                    <span>Equipment rentals</span>
+                    <strong>@Model.RentalsInWindow</strong>
+                </div>
+                <div>
+                    <span>Member check-ins</span>
+                    <strong>@Model.CheckInsInWindow</strong>
+                </div>
+                <div>
+                    <span>Active facilities</span>
+                    <strong>@Model.ActiveFacilities</strong>
+                </div>
+            </div>
+        </div>
+
+        <nav class="admin-ops-links mb-4" aria-label="Admin operations">
+            <a class="is-active" asp-controller="Home" asp-action="Index">Home dashboard</a>
+            @if (User.IsInRole(AppRoles.Administrator))
+            {
+                <a asp-controller="Admin" asp-action="Index">Admin governance</a>
+                <a asp-controller="Reports" asp-action="Index">Reports &amp; analytics</a>
+            }
+            @if (User.IsInRole(AppRoles.Staff) || User.IsInRole(AppRoles.Administrator))
+            {
+                <a asp-controller="Staff" asp-action="CheckIn">Staff check-in</a>
+            }
+        </nav>
+
+        <div class="row g-4">
+            <div class="col-lg-7">
+                <div class="panel chart-panel">
+                    <div class="chart-panel__head">
+                        <h2 class="h5 mb-1">Bookings over time</h2>
+                        <p class="muted small mb-0">Bar chart of facility booking volume in the selected window.</p>
+                    </div>
+                    <div class="chart-canvas-wrap">
+                        <canvas id="chartBookingsTrend" aria-label="Bookings over time bar chart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="panel chart-panel">
+                    <div class="chart-panel__head">
+                        <h2 class="h5 mb-1">Bookings by status</h2>
+                        <p class="muted small mb-0">Pie chart of booking lifecycle status.</p>
+                    </div>
+                    <div class="chart-canvas-wrap chart-canvas-wrap--square">
+                        <canvas id="chartBookingsStatus" aria-label="Bookings by status pie chart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <div class="panel chart-panel">
+                    <div class="chart-panel__head">
+                        <h2 class="h5 mb-1">Equipment rentals</h2>
+                        <p class="muted small mb-0">Bar chart of rental volume by equipment (quantity summed).</p>
+                    </div>
+                    <div class="chart-canvas-wrap">
+                        <canvas id="chartRentals" aria-label="Equipment rentals bar chart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="panel chart-panel">
+                    <div class="chart-panel__head">
+                        <h2 class="h5 mb-1">Facility usage</h2>
+                        <p class="muted small mb-0">Pie chart of non-cancelled bookings per facility.</p>
+                    </div>
+                    <div class="chart-canvas-wrap chart-canvas-wrap--square">
+                        <canvas id="chartFacilities" aria-label="Facility usage pie chart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12">
+                <div class="panel chart-panel">
+                    <div class="chart-panel__head">
+                        <h2 class="h5 mb-1">Top members</h2>
+                        <p class="muted small mb-0">Bar chart of members with the most bookings and clubhouse check-ins.</p>
+                    </div>
+                    <div class="chart-canvas-wrap chart-canvas-wrap--wide">
+                        <canvas id="chartTopMembers" aria-label="Top members bar chart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" crossorigin="anonymous"></script>
+    <script>
+        (function () {
+            const palette = ['#1f4d3a', '#2f7a6d', '#c4a35a', '#123528', '#7a9e8e', '#b08a3a', '#4a6b5c', '#8a6a20', '#3d5c4f', '#9b3b2f'];
+            const emptyMessage = (canvasId, text) => {
+                const canvas = document.getElementById(canvasId);
+                if (!canvas) return;
+                const wrap = canvas.parentElement;
+                if (!wrap) return;
+                wrap.innerHTML = '<p class="muted mb-0 text-center py-5">' + text + '</p>';
+            };
+
+            const bookingsByDay = @Html.Raw(bookingsByDayJson);
+            const bookingsByStatus = @Html.Raw(bookingsByStatusJson);
+            const rentalsByEquipment = @Html.Raw(rentalsByEquipmentJson);
+            const facilityUsage = @Html.Raw(facilityUsageJson);
+            const topMembers = @Html.Raw(topMembersJson);
+
+            if (typeof Chart === 'undefined') {
+                console.error('Chart.js failed to load');
+                return;
+            }
+
+            Chart.defaults.font.family = getComputedStyle(document.body).fontFamily || 'Manrope, sans-serif';
+            Chart.defaults.color = '#14231c';
+
+            if (!bookingsByDay.length || bookingsByDay.every(x => x.count === 0)) {
+                emptyMessage('chartBookingsTrend', 'No bookings in this window yet.');
+            } else {
+                new Chart(document.getElementById('chartBookingsTrend'), {
+                    type: 'bar',
+                    data: {
+                        labels: bookingsByDay.map(x => x.label),
+                        datasets: [{
+                            label: 'Bookings',
+                            data: bookingsByDay.map(x => x.count),
+                            backgroundColor: 'rgba(31, 77, 58, 0.75)',
+                            borderRadius: 6,
+                            maxBarThickness: 28
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: { grid: { display: false }, ticks: { maxRotation: 45, minRotation: 0, autoSkip: true, maxTicksLimit: 14 } },
+                            y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: 'rgba(20,35,28,0.06)' } }
+                        }
+                    }
+                });
+            }
+
+            if (!bookingsByStatus.length) {
+                emptyMessage('chartBookingsStatus', 'No booking status data yet.');
+            } else {
+                new Chart(document.getElementById('chartBookingsStatus'), {
+                    type: 'pie',
+                    data: {
+                        labels: bookingsByStatus.map(x => x.label),
+                        datasets: [{
+                            data: bookingsByStatus.map(x => x.count),
+                            backgroundColor: bookingsByStatus.map((_, i) => palette[i % palette.length]),
+                            borderWidth: 1,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'bottom' } }
+                    }
+                });
+            }
+
+            if (!rentalsByEquipment.length) {
+                emptyMessage('chartRentals', 'No equipment rentals in this window yet.');
+            } else {
+                new Chart(document.getElementById('chartRentals'), {
+                    type: 'bar',
+                    data: {
+                        labels: rentalsByEquipment.map(x => x.label),
+                        datasets: [{
+                            label: 'Units rented',
+                            data: rentalsByEquipment.map(x => x.count),
+                            backgroundColor: 'rgba(196, 163, 90, 0.85)',
+                            borderRadius: 6,
+                            maxBarThickness: 36
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: 'rgba(20,35,28,0.06)' } },
+                            y: { grid: { display: false } }
+                        }
+                    }
+                });
+            }
+
+            if (!facilityUsage.length) {
+                emptyMessage('chartFacilities', 'No facility usage in this window yet.');
+            } else {
+                new Chart(document.getElementById('chartFacilities'), {
+                    type: 'pie',
+                    data: {
+                        labels: facilityUsage.map(x => x.label),
+                        datasets: [{
+                            data: facilityUsage.map(x => x.count),
+                            backgroundColor: facilityUsage.map((_, i) => palette[i % palette.length]),
+                            borderWidth: 1,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'bottom' } }
+                    }
+                });
+            }
+
+            if (!topMembers.length) {
+                emptyMessage('chartTopMembers', 'No member activity in this window yet.');
+            } else {
+                new Chart(document.getElementById('chartTopMembers'), {
+                    type: 'bar',
+                    data: {
+                        labels: topMembers.map(x => x.label),
+                        datasets: [
+                            {
+                                label: 'Bookings',
+                                data: topMembers.map(x => x.bookingCount),
+                                backgroundColor: 'rgba(31, 77, 58, 0.8)',
+                                borderRadius: 6,
+                                maxBarThickness: 32
+                            },
+                            {
+                                label: 'Check-ins',
+                                data: topMembers.map(x => x.checkInCount),
+                                backgroundColor: 'rgba(47, 122, 109, 0.7)',
+                                borderRadius: 6,
+                                maxBarThickness: 32
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'bottom' } },
+                        scales: {
+                            x: { stacked: true, grid: { display: false } },
+                            y: { stacked: true, beginAtZero: true, ticks: { precision: 0 }, grid: { color: 'rgba(20,35,28,0.06)' } }
+                        }
+                    }
+                });
+            }
+        })();
+    </script>
+}

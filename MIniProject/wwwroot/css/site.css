@@ -1665,3 +1665,27 @@ body.nav-open .nav-toggle__bar:nth-child(3) {
   border-color: rgba(20, 35, 28, 0.12);
   box-shadow: none;
 }
+
+/* Admin / staff home statistics dashboard */
+.admin-home-dashboard .chart-panel__head {
+  margin-bottom: 1rem;
+}
+.admin-home-dashboard .chart-canvas-wrap {
+  position: relative;
+  height: 280px;
+}
+.admin-home-dashboard .chart-canvas-wrap--square {
+  height: 280px;
+  max-width: 360px;
+  margin-inline: auto;
+}
+.admin-home-dashboard .chart-canvas-wrap--wide {
+  height: 320px;
+}
+@media (max-width: 767.98px) {
+  .admin-home-dashboard .chart-canvas-wrap,
+  .admin-home-dashboard .chart-canvas-wrap--square,
+  .admin-home-dashboard .chart-canvas-wrap--wide {
+    height: 240px;
+  }
+}
