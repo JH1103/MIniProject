@@ -484,11 +484,14 @@ public class AdminController : Controller
         }
 
         var facilityId = item.FacilityId;
-        var hasActiveRentals = await _db.EquipmentRentals.AnyAsync(r =>
-            r.InventoryItemId == id && r.Status == EquipmentRentalStatus.Active);
-        if (hasActiveRentals)
+        var hasOpenRentals = await _db.EquipmentRentals.AnyAsync(r =>
+            r.InventoryItemId == id &&
+            (r.Status == EquipmentRentalStatus.Active ||
+             r.Status == EquipmentRentalStatus.Rented ||
+             r.Status == EquipmentRentalStatus.NotReturned));
+        if (hasOpenRentals)
         {
-            TempData["Error"] = "Cannot delete equipment while active rentals exist. Mark rentals returned or invalid first.";
+            TempData["Error"] = "Cannot delete equipment while open rentals exist. Mark rentals returned or invalid first.";
             return RedirectToAction(nameof(EditFacility), new { id = facilityId });
         }
 

@@ -12,7 +12,7 @@
         <div class="panel">
             @{
                 var chargedEquipment = Model.EquipmentRentals
-                    .Where(r => r.Status != EquipmentRentalStatus.Cancelled)
+                    .Where(r => r.Status is not (EquipmentRentalStatus.Cancelled or EquipmentRentalStatus.Inactive))
                     .ToList();
                 var equipmentTotal = chargedEquipment.Sum(r => r.Fee);
                 var facilityPortion = Math.Max(0, Model.Amount - equipmentTotal);
@@ -56,18 +56,14 @@
                             · MYR @rental.Fee.ToString("N2")
                             <span class="small muted">(full price)</span>
                             ·
-                            @if (rental.Status == EquipmentRentalStatus.Active)
-                            {
-                                <span class="badge-soft">Active</span>
+                            @{
+                                var eqLabel = EquipmentRentalLifecycle.DisplayLabel(rental.Status);
+                                var eqBadge = rental.Status is EquipmentRentalStatus.Rented
+                                    or EquipmentRentalStatus.Active
+                                    ? "badge-soft"
+                                    : "badge-warn";
                             }
-                            else if (rental.Status == EquipmentRentalStatus.Cancelled)
-                            {
-                                <span class="badge-warn">Inactive</span>
-                            }
-                            else
-                            {
-                                <span class="badge-warn">@rental.Status</span>
-                            }
+                            <span class="@eqBadge">@eqLabel</span>
                         </li>
                     }
                 </ul>

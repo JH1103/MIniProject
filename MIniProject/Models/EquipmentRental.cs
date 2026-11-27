@@ -22,6 +22,10 @@ public class EquipmentRental
 
     public DateTime StartUtc { get; set; }
     public DateTime DueUtc { get; set; }
+
+    /// <summary>When staff confirmed the member took / checked out the equipment.</summary>
+    public DateTime? PickedUpAt { get; set; }
+
     public DateTime? ReturnedAt { get; set; }
 
     public EquipmentRentalStatus Status { get; set; } = EquipmentRentalStatus.Active;

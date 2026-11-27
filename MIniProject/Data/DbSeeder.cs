@@ -21,6 +21,7 @@ public static class DbSeeder
         await EnsureMemberCheckInTableAsync(db);
         await EnsureClearanceSchemaAsync(db);
         await EnsureEquipmentRentalTableAsync(db);
+        await EnsureEquipmentRentalPickupSchemaAsync(db);
         await EnsureEquipmentCatalogTableAsync(db);
 
         foreach (var role in AppRoles.All)
@@ -634,6 +635,7 @@ public static class DbSeeder
                     [Quantity] int NOT NULL,
                     [StartUtc] datetime2 NOT NULL,
                     [DueUtc] datetime2 NOT NULL,
+                    [PickedUpAt] datetime2 NULL,
                     [ReturnedAt] datetime2 NULL,
                     [Status] int NOT NULL,
                     [Fee] decimal(18,2) NOT NULL,
@@ -648,6 +650,23 @@ public static class DbSeeder
                 CREATE INDEX [IX_EquipmentRentals_MemberId_Status]
                     ON [EquipmentRentals] ([MemberId], [Status]);
             END
+            """);
+    }
+
+    /// <summary>
+    /// Adds PickedUpAt for staff checkout confirmation on existing installs.
+    /// </summary>
+    private static async Task EnsureEquipmentRentalPickupSchemaAsync(ApplicationDbContext db)
+    {
+        if (!db.Database.IsSqlServer())
+        {
+            return;
+        }
+
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            IF COL_LENGTH('EquipmentRentals', 'PickedUpAt') IS NULL
+                ALTER TABLE [EquipmentRentals] ADD [PickedUpAt] datetime2 NULL;
             """);
     }
 

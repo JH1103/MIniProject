@@ -1,17 +1,24 @@
 @model EquipmentRental
+@using MIniProject.Services
 @{
     ViewData["Title"] = $"Rental #{Model.Id}";
     var isStaff = User.IsInRole(AppRoles.Staff) || User.IsInRole(AppRoles.Administrator);
-    var canEdit = Model.Status is EquipmentRentalStatus.Active or EquipmentRentalStatus.Invalid;
-    var canDelete = Model.Status is EquipmentRentalStatus.Invalid or EquipmentRentalStatus.Cancelled
-                    || (isStaff && Model.Status == EquipmentRentalStatus.Returned);
+    var statusLabel = EquipmentRentalLifecycle.DisplayLabel(Model.Status);
+    var canEdit = Model.Status is EquipmentRentalStatus.Active
+        or EquipmentRentalStatus.Rented
+        or EquipmentRentalStatus.NotReturned
+        or EquipmentRentalStatus.Invalid;
+    var canDelete = Model.Status is EquipmentRentalStatus.Invalid
+        or EquipmentRentalStatus.Cancelled
+        or EquipmentRentalStatus.Inactive
+        || (isStaff && Model.Status == EquipmentRentalStatus.Returned);
 }
 
 <section class="section">
     <div class="container" style="max-width:720px">
         <div class="section-head">
             <h2>Equipment rental #@Model.Id</h2>
-            <p class="muted mb-0">@Model.InventoryItem?.Name · @(Model.Status == EquipmentRentalStatus.Cancelled ? "Inactive" : Model.Status.ToString())</p>
+            <p class="muted mb-0">@Model.InventoryItem?.Name · @statusLabel</p>
         </div>
         <div class="panel">
             <div class="row g-3">
@@ -21,6 +28,8 @@
                 <div class="col-md-6"><strong>Fee</strong><div>MYR @Model.Fee.ToString("N2")</div></div>
                 <div class="col-md-6"><strong>Start</strong><div>@Model.StartUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm")</div></div>
                 <div class="col-md-6"><strong>Due</strong><div>@Model.DueUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm")</div></div>
+                <div class="col-md-6"><strong>Status</strong><div><span class="badge-soft">@statusLabel</span></div></div>
+                <div class="col-md-6"><strong>Picked up</strong><div>@(Model.PickedUpAt?.ToLocalTime().ToString("dd MMM yyyy HH:mm") ?? "—")</div></div>
                 <div class="col-md-6"><strong>Returned</strong><div>@(Model.ReturnedAt?.ToLocalTime().ToString("dd MMM yyyy HH:mm") ?? "—")</div></div>
                 <div class="col-md-6"><strong>Booking</strong><div>@(Model.BookingId is null ? "—" : $"#{Model.BookingId}")</div></div>
                 <div class="col-12"><strong>Notes</strong><div>@(Model.Notes ?? "—")</div></div>
@@ -31,15 +40,31 @@
                 {
                     <a class="btn btn-ghost" asp-action="Edit" asp-route-id="@Model.Id">Update rental</a>
                 }
-                @if (Model.Status == EquipmentRentalStatus.Active)
+                @if (isStaff && EquipmentRentalLifecycle.CanMarkPickedUp(Model.Status))
+                {
+                    <form asp-action="MarkPickedUp" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model.Id" />
+                        <button class="btn btn-primary" type="submit">Confirm taken / pickup</button>
+                    </form>
+                }
+                @if (EquipmentRentalLifecycle.CanMarkReturned(Model.Status))
                 {
                     <form asp-action="Return" method="post">
                         @Html.AntiForgeryToken()
                         <input type="hidden" name="id" value="@Model.Id" />
-                        <button class="btn btn-primary" type="submit">Mark returned</button>
+                        <button class="btn btn-primary" type="submit">
+                            @(Model.Status == EquipmentRentalStatus.NotReturned ? "Mark returned (was overdue)" : "Mark returned")
+                        </button>
                     </form>
                 }
-                @if (isStaff && Model.Status == EquipmentRentalStatus.Active)
+                else if (Model.Status == EquipmentRentalStatus.Active)
+                {
+                    <p class="muted mb-0 align-self-center">Return is available after staff confirm pickup (Rented).</p>
+                }
+                @if (isStaff && Model.Status is EquipmentRentalStatus.Active
+                    or EquipmentRentalStatus.Rented
+                    or EquipmentRentalStatus.NotReturned)
                 {
                     <form asp-action="MarkInvalid" method="post">
                         @Html.AntiForgeryToken()

@@ -75,10 +75,18 @@ public enum ClearanceStatus
 
 public enum EquipmentRentalStatus
 {
+    /// <summary>Reserved / awaiting staff confirmation that the member took the equipment.</summary>
     Active = 0,
     Returned = 1,
+    /// <summary>Linked booking cancelled (shown as Inactive).</summary>
     Cancelled = 2,
-    Invalid = 3
+    Invalid = 3,
+    /// <summary>Staff confirmed the member picked up / took the equipment.</summary>
+    Rented = 4,
+    /// <summary>Not picked up within 15 minutes after rental start.</summary>
+    Inactive = 5,
+    /// <summary>Due/end time passed while still rented (not returned).</summary>
+    NotReturned = 6
 }
 
 public static class AppRoles
