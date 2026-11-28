@@ -106,7 +106,7 @@ public class AccountController : Controller
 
         if (user is not null && await _userManager.IsInRoleAsync(user, AppRoles.Staff))
         {
-            return RedirectToAction("Index", "Staff");
+            return RedirectToAction("Index", "Home");
         }
 
         return RedirectToAction("Dashboard", "Member");
