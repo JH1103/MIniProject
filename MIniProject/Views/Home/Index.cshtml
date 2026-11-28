@@ -1,7 +1,6 @@
 ﻿@model List<Facility>
 @{
     ViewData["Title"] = "Home";
-    var announcements = ViewBag.Announcements as List<Announcement> ?? new();
 }
 
 <section class="hero">
@@ -39,26 +38,3 @@
         </div>
     </div>
 </section>
-
-@if (announcements.Count > 0)
-{
-    <section class="section" style="padding-top:0">
-        <div class="container">
-            <div class="section-head">
-                <h2>Announcements</h2>
-                <p class="muted mb-0">Club notices and operating updates.</p>
-            </div>
-            <div class="row g-3">
-                @foreach (var item in announcements)
-                {
-                    <div class="col-md-6">
-                        <div class="panel">
-                            <h3 class="h5">@item.Title</h3>
-                            <p class="muted mb-0">@item.Body</p>
-                        </div>
-                    </div>
-                }
-            </div>
-        </div>
-    </section>
-}
