@@ -33,24 +33,11 @@ public class HomeController : Controller
             .Take(8)
             .ToListAsync();
 
-        var announcements = await _db.Announcements
-            .Where(a => a.IsPublished)
-            .OrderByDescending(a => a.PublishedAt)
-            .Take(3)
-            .ToListAsync();
-
-        ViewBag.Announcements = announcements;
         return View(facilities);
     }
 
-    public async Task<IActionResult> Contact()
-    {
-        ViewBag.Announcements = await _db.Announcements
-            .Where(a => a.IsPublished)
-            .OrderByDescending(a => a.PublishedAt)
-            .ToListAsync();
-        return View();
-    }
+    // Legacy Contact & announcements page removed; contact lives in the site footer.
+    public IActionResult Contact() => RedirectToAction(nameof(Index));
 
     public IActionResult Privacy() => View();
 

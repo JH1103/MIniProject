@@ -39,7 +39,7 @@
             <nav class="site-drawer site-drawer--desktop" id="siteDrawerDesktop" aria-label="Primary">
                 <div class="site-drawer__panel">
                     <ul class="navbar-nav site-nav__links">
-                        @* Admin chrome: hide Facilities / Membership / Contact / My Dashboard / Staff dashboard *@
+                        @* Admin chrome: hide Facilities / Membership / My Dashboard / Staff dashboard *@
                         @if (!(SignInManager.IsSignedIn(User) && User.IsInRole(AppRoles.Administrator)))
                         {
                             @* Staff do not browse the public Facilities catalogue *@
@@ -59,7 +59,6 @@
                             {
                                 <li class="nav-item"><a class="nav-link" asp-controller="Membership" asp-action="Plans">Membership</a></li>
                             }
-                            <li class="nav-item"><a class="nav-link" asp-controller="Home" asp-action="Contact">Contact</a></li>
                         }
                         @if (SignInManager.IsSignedIn(User) && (User.IsInRole(AppRoles.Member) || User.IsInRole(AppRoles.Staff) || User.IsInRole(AppRoles.Administrator)))
                         {
@@ -152,7 +151,6 @@
                     {
                         <li class="nav-item"><a class="nav-link" asp-controller="Membership" asp-action="Plans">Membership</a></li>
                     }
-                    <li class="nav-item"><a class="nav-link" asp-controller="Home" asp-action="Contact">Contact</a></li>
                 }
                 @if (SignInManager.IsSignedIn(User) && (User.IsInRole(AppRoles.Member) || User.IsInRole(AppRoles.Staff) || User.IsInRole(AppRoles.Administrator)))
                 {
@@ -218,6 +216,13 @@
             <div>
                 <strong class="brand-mark">Kota Permai Golf &amp; Country Club</strong>
                 <p class="mb-0 mt-2">Reserve sports courts, pools, gym, driving range and banquet rooms online — Kota Kemuning, Shah Alam.</p>
+            </div>
+            <div class="footer-contact">
+                <p class="footer-contact__label">Contact</p>
+                <p class="mb-2">No. 1, Jalan 31/100A, Kota Kemuning, Section 31,<br />40460 Shah Alam, Selangor Darul Ehsan, Malaysia</p>
+                <p class="mb-2">Office / Sports: <a href="tel:+60351223700">+603 5122 3700</a></p>
+                <p class="mb-2">Website: <a href="https://www.kotapermai.com.my/" target="_blank" rel="noopener">kotapermai.com.my</a></p>
+                <p class="mb-0">Email: <a href="mailto:hello@kotapermai.local">hello@kotapermai.local</a></p>
             </div>
             <div>
                 <p class="mb-1">MYR payments · English · PDPA notice on registration</p>
